@@ -1,11 +1,19 @@
-# Publishes a GitHub Release when a version tag is pushed:
-#   git tag v1.2.0 && git push origin v1.2.0
-# Installed copies of Dash Lite pick it up through their automatic update.
+# Publishes a GitHub Release (Windows + Linux executables, SHA256SUMS, notes from CHANGELOG.md).
+# Two ways to start it:
+#   - GitHub → Actions → Release → "Run workflow" (version pre-filled from server.go if left empty)
+#   - push a tag: git tag v1.2.0 && git push origin v1.2.0
+# Installed copies of Dash Lite pick the new Release up through their automatic update.
 name: Release
 
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version à publier, ex. 1.2.0 (vide = valeur de appVersion dans server.go)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -18,21 +26,36 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+      - name: Version
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            v="${GITHUB_REF_NAME#v}"
+          else
+            v="${{ github.event.inputs.version }}"
+            v="${v#v}"
+            [ -n "$v" ] || v=$(sed -n 's/^var appVersion = "\(.*\)"/\1/p' server.go)
+          fi
+          echo "VERSION=$v" >> "$GITHUB_ENV"
+          echo "TAG=v$v" >> "$GITHUB_ENV"
+          echo "Version : $v"
       - name: Build
-        run: VERSION="${GITHUB_REF_NAME#v}" ./build/build.sh
+        run: ./build/build.sh
       - name: Release notes from CHANGELOG.md
         run: |
-          v="${GITHUB_REF_NAME#v}"
-          awk -v v="$v" '
+          awk -v v="$VERSION" '
             /^## \[/ { if (on) exit; if (index($0, "[" v "]")) { on = 1; next } }
             on { print }
           ' CHANGELOG.md > notes.md
-          if [ ! -s notes.md ]; then echo "Version $v." > notes.md; fi
+          if [ ! -s notes.md ]; then echo "Version $VERSION." > notes.md; fi
           cat notes.md
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/* \
-            --title "Dash Lite ${GITHUB_REF_NAME#v}" \
-            --notes-file notes.md
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+            gh release edit "$TAG" --title "Dash Lite $VERSION" --notes-file notes.md
+          else
+            gh release create "$TAG" dist/* --target "$GITHUB_SHA" \
+              --title "Dash Lite $VERSION" --notes-file notes.md
+          fi

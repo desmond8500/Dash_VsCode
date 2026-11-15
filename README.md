@@ -44,12 +44,9 @@ Les versions suivent `MAJEUR.MINEUR.CORRECTIF` (ex. `1.2.0` pour des nouveautés
 
 1. Décrivez les changements dans `CHANGELOG.md` sous un titre `## [1.2.0] - AAAA-MM-JJ`.
 2. Mettez le même numéro dans `server.go` (`var appVersion = "1.2.0"`), pour les compilations locales.
-3. Committez, puis créez et poussez le tag :
-
-```bash
-git tag v1.2.0
-git push origin main v1.2.0
-```
+3. Committez et poussez, puis lancez la publication, au choix :
+   - sur GitHub : onglet **Actions** → **Release** → **Run workflow** (laissez la version vide pour utiliser celle de `server.go`) ;
+   - ou en ligne de commande : `git tag v1.2.0 && git push origin v1.2.0`.
 
 Le workflow GitHub Actions `.github/workflows/release.yml` compile alors les exécutables Windows et Linux avec ce numéro
 de version, calcule `SHA256SUMS` et crée la Release, avec la section du `CHANGELOG.md` comme notes de version.
