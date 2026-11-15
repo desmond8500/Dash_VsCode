@@ -113,6 +113,11 @@ sur votre machine (npm, php, composer, python, flutter…).
 
 ### Git
 - Branche, ↓ en retard / ↑ en avance, fichiers modifiés (indexer, retirer, annuler, voir le diff), historique des commits.
+- **Message de commit généré** : le bouton ✨ du champ de message (ou *Commit* avec un message vide) rédige un message
+  au format *conventional commits* à partir des modifications, hors ligne et sans IA. Il déduit le type (`feat`, `fix`,
+  `docs`, `build`, `refactor`, `test`, `ci`, `style`, `chore`) et la portée des fichiers touchés, puis détaille les fichiers ajoutés,
+  modifiés, renommés ou supprimés, ainsi que les tâches Markdown cochées, ajoutées ou retirées et les nouvelles sections.
+  Exemple : `chore(TODO): coche « Déployer »`. Le message reste modifiable, `Ctrl+Z` le retire.
 - Commit (`Ctrl+Entrée` dans le message), **Commit + Push**, Pull, Push (crée la branche amont si besoin), Fetch, Synchroniser.
 - Changement / création de branche, ajout ou modification d'un remote (« connecter un dépôt »), `git init`.
 - **Tout synchroniser** (barre de titre) : `pull --ff-only` puis `push` sur tous les projets git, en toute sécurité
@@ -174,6 +179,7 @@ server.go       HTTP, jeton, API projets/réglages
 fsapi.go        fichiers, recherche, tâches Markdown
 runs.go         terminal et sessions de commandes (flux SSE)
 git.go          opérations git
+commitmsg.go    rédaction automatique des messages de commit
 detect.go       détection des commandes par type de projet
 proc_*.go       spécificités Windows / Unix
 web/            interface (HTML/CSS/JS sans dépendance, intégrée dans l'exécutable)

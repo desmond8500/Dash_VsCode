@@ -357,7 +357,10 @@ pre.output { background: #1a1a1a; border: 1px solid #333; padding: 8px 10px; fon
 
 /* ---------- view specifics ---------- */
 .git-msg { padding: 4px 12px 8px; }
-.git-msg .textarea { margin-bottom: 6px; }
+.git-msg .textarea { margin-bottom: 6px; padding-right: 28px; }
+.git-msg-box { position: relative; }
+.git-gen { position: absolute; right: 3px; top: 3px; width: 22px; height: 22px; color: #e2c08d; }
+.git-gen.busy svg { animation: spin 1s linear infinite; }
 .git-branch { display: flex; align-items: center; gap: 6px; padding: 6px 12px 2px; font-size: 12px; flex-wrap: wrap; }
 .git-branch .br { display: inline-flex; align-items: center; gap: 4px; background: var(--btn2); padding: 2px 8px; border-radius: 10px; cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .git-branch .br:hover { background: #45494e; }

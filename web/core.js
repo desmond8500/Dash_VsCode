@@ -131,6 +131,7 @@ const ICONS = {
   key: '<rect x="1.5" y="4.5" width="13" height="7" rx="1"/><path d="M4 7h1M7 7h1M10 7h2M4 9h8"/>',
   branch: '<circle cx="4.5" cy="3.5" r="1.5"/><circle cx="4.5" cy="12.5" r="1.5"/><circle cx="11.5" cy="5.5" r="1.5"/><path d="M4.5 5v6M11.5 7c0 3-7 1.5-7 4"/>',
   box: '<rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/>',
+  sparkle: '<path d="M8 1.5 9.4 6.6 14.5 8 9.4 9.4 8 14.5 6.6 9.4 1.5 8 6.6 6.6z"/><path d="M13 1.5v2.5M11.8 2.8h2.5"/>',
   outline: '<path d="M2.5 3.5h11M5 6.5h8.5M5 9.5h8.5M7.5 12.5h6"/><circle cx="2.8" cy="12.5" r=".1"/>',
   checkbox: '<rect x="2.5" y="2.5" width="11" height="11" rx="1.5"/><path d="m5 8 2 2 4-4"/>',
 };

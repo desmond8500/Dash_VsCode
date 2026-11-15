@@ -381,6 +381,7 @@ function registerCommands() {
   }, '', () => !!mdTab());
   cmd('tasks.open', 'Tâches : ouvrir le fichier des tâches', () => openFile(todoFile(), { preview: false }), '', hasP);
   cmd('git.commit', 'Git : commit', () => { showView('git'); setTimeout(() => $('.git-msg-input') && $('.git-msg-input').focus(), 100); }, '', hasGit);
+  cmd('git.generate', 'Git : générer le message de commit', () => { showView('git'); setTimeout(() => generateCommitMessage(), 150); }, '', hasGit);
   cmd('git.pull', 'Git : pull', () => gitOp('git.pull', {}, { title: 'Pull' }), '', hasGit);
   cmd('git.push', 'Git : push', () => gitOp('git.push', {}, { title: 'Push' }), '', hasGit);
   cmd('git.sync', 'Git : synchroniser (pull + push)', () => gitOp('git.sync', {}, { title: 'Synchronisation' }), '', hasGit);

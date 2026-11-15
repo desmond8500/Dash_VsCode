@@ -79,6 +79,7 @@ func main() {
 	app.registerCommands()
 	app.registerBrowserHelpers()
 	app.registerShortcut()
+	app.registerCommitSuggest()
 	app.updater = &Updater{app: app}
 	app.registerUpdate()
 

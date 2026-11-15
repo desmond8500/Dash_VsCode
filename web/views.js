@@ -527,13 +527,14 @@ function drawGit() {
     g.upstream ? h('span', { class: 'muted', title: 'Branche amont', text: g.upstream }) : h('span', { class: 'muted', text: g.remotes.length ? 'pas de branche amont' : 'aucun remote' }),
     g.behind ? h('span', { title: 'Commits à récupérer', text: '↓' + g.behind }) : null,
     g.ahead ? h('span', { title: 'Commits à pousser', text: '↑' + g.ahead }) : null);
-  const ta = h('textarea', { class: 'textarea git-msg-input', rows: '2', placeholder: `Message de commit (${MOD}+Entrée pour valider)`, spellcheck: 'false' });
+  const ta = h('textarea', { class: 'textarea git-msg-input', rows: '2', placeholder: `Message de commit — ✨ pour le générer, ${MOD}+Entrée pour valider`, spellcheck: 'false' });
   ta.value = msgVal;
   ta.addEventListener('input', () => (GIT.msg[S.pid] = ta.value));
   ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); doCommit(false); } });
   const staged = g.files.filter((f) => f.staged);
   const changes = g.files.filter((f) => f.unstaged || f.untracked);
-  const msg = h('div', { class: 'git-msg' }, ta,
+  const gen = h('button', { class: 'icon-btn git-gen', title: 'Générer le message à partir des modifications', html: icon('sparkle'), onclick: () => generateCommitMessage() });
+  const msg = h('div', { class: 'git-msg' }, h('div', { class: 'git-msg-box' }, ta, gen),
     h('div', { class: 'btn-row' },
       h('button', { class: 'btn', html: icon('check') + 'Commit', title: staged.length ? 'Valider les fichiers indexés' : 'Indexer tout et valider', onclick: () => doCommit(false) }),
       h('button', { class: 'btn secondary', html: icon('push') + 'Commit + Push', onclick: () => doCommit(true) })));
@@ -612,11 +613,36 @@ function drawGit() {
   if (focused) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
 }
 
+// fills the commit box with a message written from the changes (offline analysis)
+async function generateCommitMessage({ quiet = false } = {}) {
+  const btn = $('.git-gen');
+  btn && btn.classList.add('busy');
+  try {
+    const r = await api('git.suggest', { p: S.pid });
+    GIT.msg[S.pid] = r.message;
+    const ta = $('.git-msg-input');
+    if (ta) {
+      ta.focus();
+      ta.select();
+      if (!document.execCommand('insertText', false, r.message)) ta.value = r.message; // Ctrl+Z restores the previous text
+      ta.style.height = Math.min(260, Math.max(54, ta.scrollHeight + 2)) + 'px';
+      ta.setSelectionRange(0, r.message.split('\n')[0].length);
+    }
+    if (!quiet) toast(`Message proposé d'après ${r.files} fichier(s)${r.staged ? ' indexé(s)' : ''} — relisez-le puis validez.`, 'ok', 3500);
+    return r.message;
+  } catch (e) { toastErr(e); return null; } finally { btn && btn.classList.remove('busy'); }
+}
+
 async function doCommit(push) {
   const w = W();
   const g = w.git;
   const message = (GIT.msg[S.pid] || '').trim();
-  if (!message) { toast('Écrivez un message de commit.', 'err'); $('.git-msg-input') && $('.git-msg-input').focus(); return; }
+  if (!message) {
+    // nothing typed: propose a message instead of failing
+    if (g && g.files.length && await generateCommitMessage({ quiet: true })) toast('Message de commit proposé : relisez-le puis cliquez à nouveau sur Commit.', 'ok', 4000);
+    else toast('Écrivez un message de commit.', 'err');
+    return;
+  }
   const staged = g.files.filter((f) => f.staged).length;
   if (!g.files.length) { toast('Rien à valider.', ''); return; }
   // unsaved editors would be left out
