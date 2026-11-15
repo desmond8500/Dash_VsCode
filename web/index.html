@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="dash-token" content="__DASH_TOKEN__">
+<meta name="dash-version" content="__DASH_VERSION__">
+<title>Dash Lite</title>
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header id="titlebar">
+  <button class="tb-btn" id="menu-btn" title="Menu"></button>
+  <button class="tb-project" id="project-btn" title="Changer de projet (Ctrl+R)"><span class="tb-project-name">Aucun projet</span><span class="chev"></span></button>
+  <div class="tb-center"><button id="command-center" title="Ouvrir un fichier (Ctrl+P) — tapez > pour les commandes"><span class="cc-icon"></span><span class="cc-text">Rechercher des fichiers</span></button></div>
+  <div class="tb-right">
+    <button class="tb-btn tb-text" id="sync-all-btn" title="Tout synchroniser : pull --ff-only puis push sur tous les projets git"><span class="ico"></span><span>Tout synchroniser</span></button>
+  </div>
+</header>
+<div id="main">
+  <nav id="activity"></nav>
+  <aside id="sidebar">
+    <div class="side-head"><span class="side-title"></span><span class="side-actions"></span></div>
+    <div class="side-body"></div>
+  </aside>
+  <div class="sash v" id="sash-side"></div>
+  <section id="workbench">
+    <div id="editor-area">
+      <div id="tabs"></div>
+      <div id="breadcrumb"></div>
+      <div id="editor-host"></div>
+    </div>
+    <div class="sash h" id="sash-panel"></div>
+    <div id="panel">
+      <div class="panel-head">
+        <div class="panel-tabs"><span class="panel-tab active">TERMINAL</span><span class="panel-sub"></span></div>
+        <div class="panel-actions"></div>
+      </div>
+      <div class="panel-body">
+        <div id="term-view">
+          <div id="term-out" tabindex="0"></div>
+          <div id="term-input-row"><span id="term-prompt"></span><input id="term-input" spellcheck="false" autocomplete="off" placeholder="Tapez une commande…"></div>
+        </div>
+        <div id="session-list"></div>
+      </div>
+    </div>
+  </section>
+</div>
+<footer id="statusbar"><div class="sb-left"></div><div class="sb-right"></div></footer>
+<div id="quickpick" hidden><div class="qp-box"><input class="qp-input" spellcheck="false" autocomplete="off"><div class="qp-list"></div></div></div>
+<div id="modal-root"></div>
+<div id="ctxmenu" hidden></div>
+<div id="toasts"></div>
+<script src="/md.js"></script>
+<script src="/term.js"></script>
+<script src="/core.js"></script>
+<script src="/editor.js"></script>
+<script src="/views.js"></script>
+<script src="/panel.js"></script>
+<script src="/main.js"></script>
+</body>
+</html>
