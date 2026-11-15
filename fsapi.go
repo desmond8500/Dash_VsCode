@@ -567,9 +567,12 @@ func fsRoots() []string {
 // ---------------------------------------------------------------- tasks
 
 var (
-	taskRe    = regexp.MustCompile(`^(\s*)(?:[-*+]|\d+[.)])\s+\[([ xX])\]\s?(.*)$`)
-	headingRe = regexp.MustCompile(`^(#{1,6})\s+(.+?)\s*#*\s*$`)
-	fenceRe   = regexp.MustCompile("^\\s*(```|~~~)")
+	taskRe        = regexp.MustCompile(`^(\s*)(?:[-*+]|\d+[.)])\s+\[([ xX])\]\s?(.*)$`)
+	headingRe     = regexp.MustCompile(`^(#{1,6})\s+(.+?)\s*#*\s*$`)
+	fenceRe       = regexp.MustCompile("^\\s*(```|~~~)")
+	htmlHeadingRe = regexp.MustCompile(`(?i)^\s*<h([1-6])\b[^>]*>(.*?)</h[1-6]>\s*$`)
+	tagRe         = regexp.MustCompile(`<[^>]+>`)
+	listItemRe    = regexp.MustCompile(`^\s*([-*+]|\d+[.)])\s`)
 )
 
 func isMarkdown(name string) bool {
@@ -598,6 +601,7 @@ func (a *App) registerTasks() {
 			Text    string `json:"text"`
 			Done    bool   `json:"done"`
 			Heading string `json:"heading"`
+			HLine   int    `json:"headingLine"`
 			Indent  int    `json:"indent"`
 		}
 		tasks := []task{}
@@ -615,6 +619,7 @@ func (a *App) registerTasks() {
 			}
 			rel := p.rel(path)
 			heading := ""
+			hline := 0
 			inFence := false
 			for i, line := range strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n") {
 				if fenceRe.MatchString(line) {
@@ -625,12 +630,16 @@ func (a *App) registerTasks() {
 					continue
 				}
 				if m := headingRe.FindStringSubmatch(line); m != nil {
-					heading = m[2]
+					heading, hline = m[2], i+1
+					continue
+				}
+				if m := htmlHeadingRe.FindStringSubmatch(line); m != nil {
+					heading, hline = tagRe.ReplaceAllString(m[2], ""), i+1
 					continue
 				}
 				if m := taskRe.FindStringSubmatch(line); m != nil {
 					indent := len(strings.ReplaceAll(m[1], "\t", "  "))
-					tasks = append(tasks, task{rel, i + 1, m[3], m[2] != " ", heading, indent})
+					tasks = append(tasks, task{rel, i + 1, m[3], m[2] != " ", heading, hline, indent})
 				}
 			}
 			return len(tasks) < 20000
@@ -690,9 +699,10 @@ func (a *App) registerTasks() {
 
 	a.register("tasks.add", func(raw json.RawMessage) (any, error) {
 		req, err := bind[struct {
-			P    string `json:"p"`
-			File string `json:"file"`
-			Text string `json:"text"`
+			P       string `json:"p"`
+			File    string `json:"file"`
+			Text    string `json:"text"`
+			Section int    `json:"section"` // 1-based heading line, 0 = end of file
 		}](raw)
 		if err != nil {
 			return nil, err
@@ -725,16 +735,75 @@ func (a *App) registerTasks() {
 		if strings.Contains(content, "\r\n") {
 			nl = "\r\n"
 		}
-		if content == "" {
-			content = "# TODO" + nl + nl
-		} else if !strings.HasSuffix(content, "\n") {
-			content += nl
+		if req.Section > 0 && content != "" {
+			lines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
+			out, ok := insertTaskInSection(lines, req.Section-1, text)
+			if !ok {
+				return nil, &apiError{409, "section introuvable — le fichier a changé"}
+			}
+			content = strings.Join(out, nl)
+		} else {
+			if content == "" {
+				content = "# TODO" + nl + nl
+			} else if !strings.HasSuffix(content, "\n") {
+				content += nl
+			}
+			content += "- [ ] " + text + nl
 		}
-		content += "- [ ] " + text + nl
 		os.MkdirAll(filepath.Dir(abs), 0o755)
 		if err := os.WriteFile(abs, []byte(content), 0o644); err != nil {
 			return nil, err
 		}
 		return map[string]any{"file": file}, nil
 	})
+}
+
+func isHeadingLine(lines []string, i int) bool {
+	l := lines[i]
+	return headingRe.MatchString(l) || htmlHeadingRe.MatchString(l)
+}
+
+// insertTaskInSection adds "- [ ] text" at the end of the section's own content,
+// before its first subsection (same rule as the editor).
+func insertTaskInSection(lines []string, h int, text string) ([]string, bool) {
+	if h < 0 || h >= len(lines) {
+		return nil, false
+	}
+	headEnd := h + 1
+	if !isHeadingLine(lines, h) {
+		if h+1 < len(lines) && regexp.MustCompile(`^\s{0,3}(=+|-{2,})\s*$`).MatchString(lines[h+1]) && strings.TrimSpace(lines[h]) != "" {
+			headEnd = h + 2 // setext heading
+		} else {
+			return nil, false
+		}
+	}
+	end := len(lines)
+	inFence := false
+	for i := headEnd; i < len(lines); i++ {
+		if fenceRe.MatchString(lines[i]) {
+			inFence = !inFence
+			continue
+		}
+		if inFence {
+			continue
+		}
+		if isHeadingLine(lines, i) || (i+1 < len(lines) && strings.TrimSpace(lines[i]) != "" && (i == 0 || strings.TrimSpace(lines[i-1]) == "") && regexp.MustCompile(`^\s{0,3}(=+|-{2,})\s*$`).MatchString(lines[i+1]) && !listItemRe.MatchString(lines[i])) {
+			end = i
+			break
+		}
+	}
+	at := end
+	for at > headEnd && strings.TrimSpace(lines[at-1]) == "" {
+		at--
+	}
+	out := append([]string{}, lines[:at]...)
+	if prev := out[len(out)-1]; strings.TrimSpace(prev) != "" && !listItemRe.MatchString(prev) {
+		out = append(out, "")
+	}
+	out = append(out, "- [ ] "+text)
+	rest := lines[at:]
+	if len(rest) > 0 && strings.TrimSpace(rest[0]) != "" {
+		out = append(out, "")
+	}
+	return append(out, rest...), true
 }

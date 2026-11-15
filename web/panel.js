@@ -346,6 +346,9 @@ function connectEvents() {
       case 'cwd':
         if (s) { s.info.cwd = m.cwd; if (s === currentSession()) renderPrompt(); }
         break;
+      case 'update':
+        handleUpdate(m);
+        break;
       case 'sessions':
         if (m.p === S.pid) loadSessions(S.pid);
         break;

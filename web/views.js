@@ -6,6 +6,7 @@ const VIEWS = [
   { id: 'search', icon: 'search', title: 'Rechercher', kb: 'Ctrl+Maj+F' },
   { id: 'git', icon: 'git', title: 'Git', kb: 'Ctrl+Maj+G' },
   { id: 'tasks', icon: 'tasks', title: 'Tâches', kb: 'Ctrl+Maj+X' },
+  { id: 'sections', icon: 'outline', title: 'Sections', kb: 'Ctrl+Maj+O' },
   { id: 'commands', icon: 'commands', title: 'Commandes', kb: 'Ctrl+Maj+B' },
   { id: 'projects', icon: 'projects', title: 'Projets', kb: 'Ctrl+R' },
 ];
@@ -60,7 +61,7 @@ function renderSidebar(focus) {
       h('button', { class: 'btn secondary block', style: { marginTop: '6px' }, text: 'Cloner un dépôt', onclick: () => runCmd('project.clone') })));
     return;
   }
-  ({ explorer: renderExplorer, search: renderSearch, git: renderGit, tasks: renderTasks, commands: renderCommands, projects: renderProjects })[currentView](focus);
+  ({ explorer: renderExplorer, search: renderSearch, git: renderGit, tasks: renderTasks, sections: renderSections, commands: renderCommands, projects: renderProjects })[currentView](focus);
 }
 
 // ================================================================ explorer
@@ -704,7 +705,7 @@ async function amendCommit() {
 }
 
 // ================================================================ tasks
-const TASKS = { filter: 'todo', collapsed: new Set() };
+const TASKS = { filter: 'todo', collapsed: new Set(), section: '' };
 async function refreshTasks() {
   const w = W();
   const pid = S.pid;
@@ -738,24 +739,15 @@ function renderTasks(focus) {
   const body = $('.side-body');
   body.innerHTML = '';
   const input = h('input', { class: 'input', placeholder: 'Nouvelle tâche… (Entrée)', spellcheck: 'true' });
+  const secSel = h('select', { class: 'input task-section', title: 'Section où ajouter la tâche' });
+  secSel.addEventListener('change', () => { TASKS.section = secSel.value; });
+  fillSectionSelect(secSel);
   input.addEventListener('keydown', async (e) => {
     if (e.key !== 'Enter' || !input.value.trim()) return;
     const text = input.value.trim();
     input.value = '';
-    try {
-      const file = todoFile();
-      const t = findTab(file);
-      if (t && t.loaded && t.kind === 'text') {
-        // file is open: append in the buffer so nothing gets overwritten
-        const wasClean = !isDirty(t);
-        let c = t.content;
-        if (c && !c.endsWith('\n')) c += '\n';
-        if (!c) c = '# TODO\n\n';
-        setTabContent(t, c + '- [ ] ' + text + '\n');
-        if (wasClean) await saveTab(t);
-      } else await api('tasks.add', { p: S.pid, file, text });
-      refreshTasks();
-    } catch (err) { toastErr(err); }
+    await addTaskTo(todoFile(), secSel.value ? JSON.parse(secSel.value) : null, text);
+    fillSectionSelect(secSel);
   });
   const target = h('div', { class: 'small muted', style: { marginTop: '4px', display: 'flex', gap: '6px', alignItems: 'center' } },
     h('span', { text: '→ ' + todoFile() }),
@@ -769,7 +761,7 @@ function renderTasks(focus) {
   for (const [k, label] of [['todo', 'À faire'], ['all', 'Toutes'], ['done', 'Terminées']]) {
     chips.appendChild(h('button', { class: 'chip' + (TASKS.filter === k ? ' on' : ''), text: label, onclick: () => { TASKS.filter = k; renderTasks(); } }));
   }
-  body.append(h('div', { class: 'pad' }, input, target, chips, h('div', { class: 'task-progress', style: { marginTop: '8px' } })), h('div', { class: 'task-list' }));
+  body.append(h('div', { class: 'pad' }, input, h('div', { style: { marginTop: '4px' } }, secSel), target, chips, h('div', { class: 'task-progress', style: { marginTop: '8px' } })), h('div', { class: 'task-list' }));
   drawTasks();
   refreshTasks();
   if (focus) input.focus();
@@ -810,7 +802,14 @@ function drawTasks() {
     for (const t of tasks) {
       if (t.heading !== heading) {
         heading = t.heading;
-        if (heading) box.appendChild(h('div', { class: 'task-head', text: heading }));
+        if (heading) {
+          const sec = { line: t.headingLine - 1, title: heading };
+          box.appendChild(h('div', { class: 'task-head' }, h('span', { class: 'grow', text: heading }),
+            h('button', { class: 'icon-btn', title: 'Ajouter une tâche dans cette section', html: icon('plus'), onclick: async () => {
+              const v = await prompt('Nouvelle tâche', { label: `Dans « ${heading} » (${path})` });
+              if (v && v.trim()) addTaskTo(path, sec, v.trim());
+            } })));
+        }
       }
       const cb = h('input', { type: 'checkbox' });
       cb.checked = t.done;
@@ -819,6 +818,45 @@ function drawTasks() {
         cb, h('span', { class: 'tt', html: inlineMd(t.text) })));
     }
   }
+}
+
+// sections of the task file, for the quick-add selector
+async function fillSectionSelect(sel) {
+  const file = todoFile();
+  let text = '';
+  const t = findTab(file);
+  if (t && t.loaded && t.kind === 'text') text = t.content;
+  else { try { text = (await api('fs.read', { p: S.pid, path: file })).content || ''; } catch { text = ''; } }
+  const { list } = parseSections(text);
+  sel.innerHTML = '';
+  sel.appendChild(h('option', { value: '', text: list.length ? 'Section : fin du fichier' : 'Fin du fichier' }));
+  for (const s of list) sel.appendChild(h('option', { value: JSON.stringify({ line: s.line, title: s.title }), text: '\u2003'.repeat(s.depth) + (s.title || '(sans titre)') }));
+  if (TASKS.section && [...sel.options].some((o) => o.value === TASKS.section)) sel.value = TASKS.section;
+  sel.hidden = !list.length;
+}
+
+// adds a task to `file`, inside the section {line, title} (0-based heading line) or at the end
+async function addTaskTo(file, sec, text) {
+  try {
+    const t = findTab(file);
+    if (t && t.loaded && t.kind === 'text') {
+      // the file is open: edit the buffer so nothing gets overwritten
+      const wasClean = !isDirty(t);
+      const { lines, list } = parseSections(t.content);
+      const s = sec ? list.find((o) => o.line === sec.line) || list.find((o) => o.title === sec.title) : null;
+      let out;
+      if (s) out = insertTaskLines(lines, s, text).lines.join('\n');
+      else {
+        let c = t.content;
+        if (c && !c.endsWith('\n')) c += '\n';
+        if (!c) c = '# TODO\n\n';
+        out = c + '- [ ] ' + text + '\n';
+      }
+      setTabContent(t, out);
+      if (wasClean) await saveTab(t);
+    } else await api('tasks.add', { p: S.pid, file, text, section: sec ? sec.line + 1 : 0 });
+    refreshTasks();
+  } catch (err) { toastErr(err); }
 }
 
 function inlineMd(s) {

@@ -27,6 +27,7 @@ func main() {
 	dataFlag := flag.String("data", "", "dossier de configuration (par défaut : dossier utilisateur, ou DashLite-data à côté de l'exécutable)")
 	browserMode := flag.String("browser", "app", "app = fenêtre d'application Chrome/Edge, default = navigateur par défaut")
 	version := flag.Bool("version", false, "afficher la version")
+	restarted := flag.Bool("restarted", false, "usage interne : relance après une mise à jour")
 	flag.Parse()
 	if *version {
 		fmt.Println(appName, appVersion)
@@ -40,8 +41,10 @@ func main() {
 	setupLog(dataDir)
 	log.Printf("%s %s — données : %s", appName, appVersion, dataDir)
 
+	cleanupOldBinaries()
+
 	// Already running? Just bring up a window on the existing instance.
-	if url, ok := existingInstance(*port); ok {
+	if url, ok := existingInstance(*port); ok && !*restarted {
 		log.Printf("instance existante sur %s", url)
 		if !*noBrowser {
 			openWindow(url, dataDir, *browserMode)
@@ -75,15 +78,24 @@ func main() {
 	app.registerGit()
 	app.registerCommands()
 	app.registerBrowserHelpers()
+	app.registerShortcut()
+	app.updater = &Updater{app: app}
+	app.registerUpdate()
 
 	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", *port))
+	for i := 0; err != nil && *restarted && i < 40; i++ {
+		// the previous version is still releasing the port
+		time.Sleep(250 * time.Millisecond)
+		ln, err = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", *port))
+	}
 	if err != nil {
 		ln, err = net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			fatal("Impossible d'ouvrir un port local :\n" + err.Error())
 		}
 	}
-	url := fmt.Sprintf("http://127.0.0.1:%d/", ln.Addr().(*net.TCPAddr).Port)
+	app.port = ln.Addr().(*net.TCPAddr).Port
+	url := fmt.Sprintf("http://127.0.0.1:%d/", app.port)
 	srv := &http.Server{Handler: app, ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -94,12 +106,21 @@ func main() {
 	fmt.Println(appName, "→", url)
 
 	if !*noBrowser {
-		openWindow(url, dataDir, *browserMode)
+		if !*restarted { // after an update the open window reconnects by itself
+			openWindow(url, dataDir, *browserMode)
+		}
 		go app.watchIdle()
 	}
+	go app.updater.loop()
 	<-app.quit
 	log.Printf("arrêt")
 	srv.Close()
+	ln.Close()
+	if app.restart {
+		if err := app.spawnRestart(); err != nil {
+			log.Printf("redémarrage impossible : %v", err)
+		}
+	}
 }
 
 // Quit once the window has been closed for a while (page reloads reconnect in ~1 s).
@@ -328,4 +349,33 @@ func fatal(msg string) {
 	log.Print(msg)
 	showError(appName, msg)
 	os.Exit(1)
+}
+
+// Linux: adds Dash Lite to the applications menu (absolute path to this executable).
+func (a *App) registerShortcut() {
+	a.register("os.shortcut", func(json.RawMessage) (any, error) {
+		if runtime.GOOS != "linux" {
+			return nil, badRequest("disponible uniquement sous Linux")
+		}
+		exe, err := currentExe()
+		if err != nil {
+			return nil, err
+		}
+		home, _ := os.UserHomeDir()
+		appsDir := filepath.Join(home, ".local", "share", "applications")
+		if err := os.MkdirAll(appsDir, 0o755); err != nil {
+			return nil, err
+		}
+		icon, _ := webFS.ReadFile("web/icon.svg")
+		iconPath := filepath.Join(a.dataDir, "dashlite.svg")
+		os.WriteFile(iconPath, icon, 0o644)
+		quoted := `"` + strings.ReplaceAll(exe, `"`, `\"`) + `"`
+		desktop := "[Desktop Entry]\nType=Application\nName=Dash Lite\nComment=Éditeur léger multi-projets\nExec=" + quoted +
+			"\nIcon=" + iconPath + "\nTerminal=false\nCategories=Development;TextEditor;\nStartupNotify=false\n"
+		path := filepath.Join(appsDir, "dashlite.desktop")
+		if err := os.WriteFile(path, []byte(desktop), 0o755); err != nil {
+			return nil, err
+		}
+		return map[string]string{"path": path}, nil
+	})
 }

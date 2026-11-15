@@ -9,28 +9,48 @@ Fermez la fenêtre : l'application s'arrête.
 
 ## Téléchargement et lancement
 
+Les exécutables sont publiés dans les [Releases](https://github.com/desmond8500/Dash_VsCode/releases) du dépôt.
+
 | Système | Fichier | Lancer |
 |---|---|---|
 | Windows 10/11 (PC classique) | `DashLite-Windows-x64.exe` | double-clic |
 | Windows sur ARM | `DashLite-Windows-ARM64.exe` | double-clic |
-| macOS 11+ (Intel et Apple Silicon) | `DashLite-macOS.zip` → `Dash Lite.app` | double-clic |
-| Linux | `DashLite-Linux-x64.tar.gz` → `DashLite` | double-clic ou `./DashLite` |
+| Linux (x64 / ARM64) | `DashLite-Linux-x64.tar.gz` → `DashLite` | double-clic ou `./DashLite` |
 
-Le fichier se déplace où vous voulez (Bureau, clé USB, dossier `Applications`…). Votre configuration
+Le fichier se déplace où vous voulez (Bureau, clé USB, `~/Applications`…). Votre configuration
 (projets, commandes enregistrées, onglets ouverts) est rangée à part, dans votre dossier utilisateur :
 
 - Windows : `%AppData%\DashLite`
-- macOS : `~/Library/Application Support/DashLite`
 - Linux : `~/.config/DashLite`
 
-**Mode portable** : créez un dossier `DashLite-data` à côté de l'exécutable (ou de `Dash Lite.app`) ; la
-configuration y sera stockée et voyagera avec l'application (pratique sur une clé USB).
+**Mode portable** : créez un dossier `DashLite-data` à côté de l'exécutable ; la configuration y sera stockée
+et voyagera avec l'application (pratique sur une clé USB).
+
+Sous Linux, menu ☰ → *Ajouter au menu des applications* crée un lanceur (avec l'icône) qui pointe vers l'exécutable.
+
+## Mises à jour automatiques
+
+Dash Lite vérifie au démarrage puis toutes les 6 heures si une nouvelle version est publiée dans les Releases GitHub.
+En mode **automatique** (par défaut), il la télécharge en arrière-plan, vérifie sa somme SHA-256, remplace l'exécutable
+et affiche « Redémarrer » : la nouvelle version est utilisée tout de suite si vous redémarrez, sinon au prochain lancement.
+Les modes *Me prévenir seulement* et *Désactivées* se choisissent dans les Paramètres. Menu ☰ → *Rechercher des mises à jour*
+pour vérifier à la main.
+
+Le dossier de l'exécutable doit être modifiable (sinon Dash Lite indique la page de téléchargement).
+
+### Publier une nouvelle version
+
+```bash
+git tag v1.2.0
+git push origin v1.2.0
+```
+
+Le workflow GitHub Actions `.github/workflows/release.yml` compile alors les exécutables Windows et Linux avec ce numéro
+de version, calcule `SHA256SUMS` et crée la Release. Les copies installées la récupèrent toutes seules.
 
 ### Premier lancement (application non signée)
 
 - **Windows** : SmartScreen peut afficher « Windows a protégé votre ordinateur » → *Informations complémentaires* → *Exécuter quand même*.
-- **macOS** : au premier double-clic, macOS refuse d'ouvrir une app non signée. Ouvrez *Réglages Système → Confidentialité et sécurité*,
-  puis *Ouvrir quand même* (ou, dans le Terminal : `xattr -dr com.apple.quarantine "/Applications/Dash Lite.app"`).
 - **Linux** : si le double-clic ne lance rien, rendez le fichier exécutable (`chmod +x DashLite`).
 
 ### La fenêtre
@@ -53,7 +73,9 @@ sur votre machine (npm, php, composer, python, flutter…).
 - Arborescence avec création en ligne (`Alt+N`), renommage (`F2`), suppression (`Suppr`), glisser-déposer, menu clic droit,
   filtre « Markdown seulement », couleurs git (modifié / nouveau).
 - Onglets (aperçu en italique, ● = non enregistré, glisser pour réordonner), `Ctrl+P` pour ouvrir un fichier par recherche floue.
-- Éditeur : numéros de ligne, indentation détectée, `Tab`/`Maj+Tab`, `Alt+↑/↓` déplacer la ligne, `Ctrl+D` dupliquer,
+- Éditeur avec **coloration syntaxique** (JavaScript/TypeScript, JSON, PHP/Blade, Python, Go, Rust, Java, Kotlin, C#, C/C++,
+  Dart, Swift, HTML/XML/Vue, CSS/SCSS, Markdown, YAML, TOML/INI/.env, Shell, PowerShell, Batch, SQL, Dockerfile, Makefile),
+  ligne courante surlignée, numéros de ligne, indentation détectée, `Tab`/`Maj+Tab`, `Alt+↑/↓` déplacer la ligne, `Ctrl+D` dupliquer,
   `Ctrl+/` commenter, retour à la ligne (`Alt+Z`), `Ctrl+G` aller à la ligne, conserve CRLF/BOM/Latin-1.
 - **Détection des conflits** : si git ou un autre programme modifie un fichier ouvert, il est rechargé s'il n'a pas de
   modifications ; sinon Dash propose de recharger ou d'écraser.
@@ -67,6 +89,16 @@ sur votre machine (npm, php, composer, python, flutter…).
 - Vue **Tâches** (`Ctrl+Maj+X`) : toutes les `- [ ]` du projet, groupées par fichier et par titre, avec progression,
   filtres À faire / Toutes / Terminées et ajout rapide dans `TODO.md` (ou le fichier de votre choix).
 - Recherche plein texte dans le projet (`Ctrl+Maj+F`), avec casse, mot entier, regex et filtre de fichiers.
+
+### Sections (titres `#` à `######`)
+- Vue **Sections** (`Ctrl+Maj+O` pour y sauter) : l'arbre des titres du fichier Markdown ouvert (`#`, titres soulignés
+  `===`/`---` et `<h1>`…`<h6>`), avec l'avancement des tâches de chaque section et la section où se trouve le curseur.
+- Organiser : monter / descendre, **glisser-déposer** (la section prend le niveau de la cible, sous-sections comprises),
+  remonter / descendre d'un niveau (H2 → H1, H2 → H3…), renommer, supprimer, copier, créer une section ou une sous-section.
+  Chaque modification passe par l'éditeur : `Ctrl+Z` l'annule.
+- Ajouter une tâche **dans une section** : bouton ☑ de la vue Sections, sélecteur de section dans la vue Tâches,
+  ou `+` au survol d'un titre dans la vue Tâches.
+- Le fil d'Ariane affiche la section courante ; dans l'aperçu, la flèche à gauche d'un titre replie / déplie sa section.
 
 ### Terminal et commandes
 - Terminal par projet : `cd`, historique (↑/↓), complétion des noms de fichiers (`Tab`), couleurs ANSI,
@@ -102,11 +134,10 @@ jamais de mot de passe : si une opération échoue pour cette raison, configurez
 | Aperçu Markdown | `Ctrl+Maj+V` |
 | Terminal | ``Ctrl+` `` ou `Ctrl+J` |
 | Barre latérale | `Ctrl+B` |
+| Aller à une section | `Ctrl+Maj+O` |
 | Explorateur / Recherche / Git / Tâches | `Ctrl+Maj+E` / `F` / `G` / `X` |
 | Fermer l'onglet / Nouveau fichier | `Alt+W` / `Alt+N` |
 | Aller à l'onglet n | `Alt+1…9` |
-
-Sur macOS, `Cmd` fonctionne partout où `Ctrl` est indiqué.
 
 ## Options (ligne de commande)
 
@@ -128,15 +159,17 @@ démarrage et injecté dans la page) pour chaque appel d'API, refuse les requêt
 
 ## Compiler
 
-Go 1.22+ et Python 3 :
+Go 1.22+ :
 
 ```bash
-./build/build.sh        # → dist/ : Windows x64/ARM64, macOS universel, Linux x64/ARM64
-go run . -no-browser    # développement
+./build/build.sh                  # → dist/ : Windows x64/ARM64, Linux x64/ARM64 + SHA256SUMS
+VERSION=1.2.0 ./build/build.sh    # avec un numéro de version précis
+go run . -no-browser              # développement
 ```
 
 ```
 main.go         démarrage, instance unique, fenêtre, arrêt à la fermeture
+update.go       mises à jour automatiques (GitHub Releases, SHA-256, remplacement, redémarrage)
 server.go       HTTP, jeton, API projets/réglages
 fsapi.go        fichiers, recherche, tâches Markdown
 runs.go         terminal et sessions de commandes (flux SSE)
@@ -144,5 +177,7 @@ git.go          opérations git
 detect.go       détection des commandes par type de projet
 proc_*.go       spécificités Windows / Unix
 web/            interface (HTML/CSS/JS sans dépendance, intégrée dans l'exécutable)
-build/          icônes, ressources Windows, empaquetage macOS
+                highlight.js = coloration syntaxique, sections.js = gestion des sections
+build/          script de compilation, icônes, ressources Windows (icône, manifeste)
+.github/        publication automatique des Releases
 ```

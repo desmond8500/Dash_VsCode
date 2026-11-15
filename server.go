@@ -23,7 +23,7 @@ import (
 //go:embed web
 var webFS embed.FS
 
-const appVersion = "1.0.0"
+var appVersion = "1.1.0"
 
 type App struct {
 	store    *Store
@@ -34,6 +34,9 @@ type App struct {
 	handlers map[string]func(json.RawMessage) (any, error)
 	quit     chan struct{}
 	quitOnce sync.Once
+	updater  *Updater
+	restart  bool
+	port     int
 }
 
 type apiError struct {

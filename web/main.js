@@ -129,6 +129,7 @@ function renderStatus() {
     item(R, setting('wrap', false) ? icon('wrap') + ' Retour ligne' : icon('wrap'), 'Retour à la ligne automatique (Alt+Z)', toggleWrap);
     item(R, setting('autosave', false) ? icon('check') + ' Enreg. auto' : 'Enreg. auto : non', 'Enregistrement automatique — cliquer pour basculer', toggleAutosave);
   }
+  updateStatusItem(L, item);
   item(R, icon('bell'), 'Dash Lite ' + VERSION, () => runCmd('app.about'));
 }
 
@@ -252,10 +253,12 @@ function settingsDialog() {
   const body = h('div', null,
     chk('autosave', 'Enregistrement automatique (1 s après la dernière frappe)', false),
     chk('wrap', 'Retour à la ligne automatique dans l’éditeur', false),
+    chk('syntax', 'Coloration syntaxique', true),
     chk('previewTabs', 'Onglets d’aperçu (un clic simple remplace l’onglet en italique)', true),
     sel('mdMode', 'Mode d’ouverture des fichiers Markdown', [['edit', 'Éditer'], ['split', 'Partagé (éditeur + aperçu)'], ['preview', 'Aperçu']], 'edit'),
     sel('fontSize', 'Taille de police de l’éditeur', [[12, '12'], [13, '13'], [14, '14'], [15, '15'], [16, '16'], [18, '18'], [20, '20']], 14),
     sel('indent', 'Indentation par défaut', [[2, '2 espaces'], [4, '4 espaces']], 4),
+    sel('updateMode', 'Mises à jour', [['auto', 'Automatiques (installées en arrière-plan, actives au prochain lancement)'], ['notify', 'Me prévenir seulement'], ['off', 'Désactivées']], 'auto'),
     h('div', { class: 'small muted', style: { marginTop: '12px', userSelect: 'text' } }, 'Configuration enregistrée dans : ' + S.app.dataDir));
   modal({
     title: 'Paramètres', body,
@@ -290,7 +293,7 @@ function shortcutsDialog() {
   const rows = [
     ['Ouvrir un fichier', 'Ctrl+P'], ['Palette de commandes', 'Ctrl+Maj+P / F1'], ['Changer de projet', 'Ctrl+R'], ['Lancer une commande', 'Ctrl+Maj+B'],
     ['Enregistrer / tout enregistrer', 'Ctrl+S / Ctrl+Maj+S'], ['Cocher une tâche (Markdown)', 'Ctrl+Entrée'], ['Aperçu Markdown', 'Ctrl+Maj+V'],
-    ['Terminal', 'Ctrl+`  (ou Ctrl+J)'], ['Barre latérale', 'Ctrl+B'], ['Explorateur / Recherche / Git / Tâches', 'Ctrl+Maj+E / F / G / X'],
+    ['Terminal', 'Ctrl+`  (ou Ctrl+J)'], ['Aller à une section', 'Ctrl+Maj+O'], ['Barre latérale', 'Ctrl+B'], ['Explorateur / Recherche / Git / Tâches', 'Ctrl+Maj+E / F / G / X'],
     ['Fermer l’onglet / Nouveau fichier', 'Alt+W / Alt+N'], ['Aller à l’onglet n', 'Alt+1…9'], ['Aller à la ligne', 'Ctrl+G'], ['Retour à la ligne', 'Alt+Z'],
     ['Déplacer la ligne', 'Alt+↑ / Alt+↓'], ['Dupliquer la ligne', 'Ctrl+D'], ['Commenter', 'Ctrl+/'], ['Rechercher dans le fichier', 'Ctrl+F (navigateur)'],
     ['Terminal : arrêter / effacer / compléter', 'Ctrl+C / Ctrl+L / Tab'],
@@ -325,6 +328,8 @@ function mainMenu(anchor, fromBottom) {
     '-',
     { label: 'Paramètres…', action: settingsDialog },
     { label: 'Raccourcis clavier', action: shortcutsDialog },
+    { label: 'Rechercher des mises à jour…', action: () => checkForUpdates(false) },
+    S.app && S.app.platform === 'linux' ? { label: 'Ajouter au menu des applications', action: () => runCmd('app.shortcut') } : null,
     { label: 'À propos', action: () => runCmd('app.about') },
     '-',
     { label: 'Quitter Dash Lite', danger: true, action: quitApp },
@@ -368,6 +373,12 @@ function registerCommands() {
     const v = await prompt('Nouvelle tâche', { label: 'Ajoutée à ' + todoFile() });
     if (v && v.trim()) { await api('tasks.add', { p: S.pid, file: todoFile(), text: v }).catch(toastErr); const t = window.findTab(todoFile()); if (t && t.loaded && !isDirty(t)) window.reloadTab(t); refreshTasks(); }
   }, '', hasP);
+  cmd('sections.goto', 'Sections : aller à une section…', sectionPicker, 'Ctrl+Maj+O', () => !!mdTab());
+  cmd('view.sections', 'Affichage : sections du fichier', () => showView('sections'));
+  cmd('sections.add', 'Sections : nouvelle section…', () => { const t = mdTab(); if (t && isMd(t.path)) addSection(t, { level: 2 }); }, '', () => !!mdTab());
+  cmd('sections.task', 'Sections : ajouter une tâche dans la section courante…', () => {
+    const t = mdTab(); if (!t) return; const { list } = parseSections(t.content); addTaskToSection(t, list[currentSectionIndex(list)] || null);
+  }, '', () => !!mdTab());
   cmd('tasks.open', 'Tâches : ouvrir le fichier des tâches', () => openFile(todoFile(), { preview: false }), '', hasP);
   cmd('git.commit', 'Git : commit', () => { showView('git'); setTimeout(() => $('.git-msg-input') && $('.git-msg-input').focus(), 100); }, '', hasGit);
   cmd('git.pull', 'Git : pull', () => gitOp('git.pull', {}, { title: 'Pull' }), '', hasGit);
@@ -384,8 +395,12 @@ function registerCommands() {
   cmd('app.about', 'Aide : à propos de Dash Lite', () => modal({
     title: 'Dash Lite ' + VERSION,
     body: `<p>Éditeur léger multi-projets : fichiers et tâches Markdown, terminal, commandes enregistrées et git.</p><p class="muted small">Un seul exécutable, aucune installation. L'interface s'ouvre dans une fenêtre Chrome/Edge en mode application ; fermer la fenêtre arrête l'application.</p><p class="muted small">Configuration : ${esc(S.app.dataDir)}</p>`,
-    buttons: [{ label: 'Fermer', primary: true, value: true }],
-  }));
+    buttons: [{ label: 'Mises à jour…', kind: 'secondary', value: 'upd' }, { label: 'Fermer', primary: true, value: true }],
+  }).then((v) => { if (v === 'upd') updateDialog(); }));
+  cmd('app.update', 'Aide : rechercher des mises à jour', () => checkForUpdates(false));
+  cmd('app.shortcut', 'Linux : ajouter Dash Lite au menu des applications', async () => {
+    try { const r = await api('os.shortcut'); toast('Raccourci créé : ' + r.path, 'ok', 4000); } catch (e) { toastErr(e); }
+  }, '', () => S.app && S.app.platform === 'linux');
   cmd('app.quit', 'Quitter Dash Lite', quitApp);
 }
 
@@ -414,6 +429,7 @@ function setupKeys() {
     else if (mod && e.shiftKey && k === 'g') showView('git');
     else if (mod && e.shiftKey && k === 'x') showView('tasks');
     else if (mod && e.shiftKey && k === 'b') commandRunner();
+    else if (mod && e.shiftKey && k === 'o') sectionPicker();
     else if (mod && !e.shiftKey && k === 'b') document.body.classList.toggle('no-side');
     else if (mod && (e.key === '`' || e.code === 'Backquote' || k === 'j')) showPanel();
     else if (mod && !e.shiftKey && k === 'g') goToLine();
@@ -475,6 +491,7 @@ async function init() {
   applySettings();
   if (!setting('panelOpen', true)) document.body.classList.add('no-panel');
   connectEvents();
+  api('update.status').then(handleUpdate).catch(() => {});
   const first = S.projects.find((p) => p.id === S.app.active) || S.projects[0];
   await activateProject(first ? first.id : null);
   if (!first) showView('projects');

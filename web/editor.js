@@ -285,7 +285,16 @@ function buildEditor() {
   ED.wrap = h('div', { class: 'ed-wrap' });
   ED.gutter = h('div', { class: 'gutter' });
   ED.ta = h('textarea', { class: 'editor', spellcheck: 'false', autocapitalize: 'off', autocomplete: 'off', wrap: 'off' });
-  ED.wrap.append(ED.gutter, ED.ta);
+  ED.main = h('div', { class: 'ed-main' });
+  ED.hl = h('pre', { class: 'hl', 'aria-hidden': 'true' });
+  ED.hlInner = h('div', { class: 'hl-inner' });
+  ED.hlLine = h('div', { class: 'hl-curline' });
+  ED.hl.append(ED.hlLine, ED.hlInner);
+  ED.main.append(ED.hl, ED.ta);
+  ED.wrap.append(ED.gutter, ED.main);
+  window.addEventListener('resize', () => scheduleHL());
+  ED.ta.addEventListener('focus', () => ED.hl.classList.add('focused'));
+  ED.ta.addEventListener('blur', () => ED.hl.classList.remove('focused'));
   ED.preview = h('div', { class: 'preview' });
   ED.md = h('div', { class: 'md' });
   ED.preview.appendChild(ED.md);
@@ -295,7 +304,7 @@ function buildEditor() {
   host.append(ED.welcome, ED.split, ED.other, ED.banner);
 
   ED.ta.addEventListener('input', onEditorInput);
-  ED.ta.addEventListener('scroll', () => { syncGutterScroll(); syncPreviewScroll(); });
+  ED.ta.addEventListener('scroll', () => { syncGutterScroll(); syncPreviewScroll(); scheduleHL(); });
   ED.ta.addEventListener('keydown', onEditorKey);
   for (const ev of ['keyup', 'click', 'select', 'focus']) ED.ta.addEventListener(ev, () => renderCursor());
   ED.preview.addEventListener('click', onPreviewClick);
@@ -323,6 +332,50 @@ function syncGutter() {
   syncGutterScroll();
 }
 function syncGutterScroll() { ED.gutter.scrollTop = ED.ta.scrollTop; }
+
+// ---------------------------------------------------------------- syntax highlighting overlay
+const HLS = { lines: null, text: null, lang: null, frame: 0 };
+function scheduleHL() {
+  if (HLS.frame) return;
+  HLS.frame = requestAnimationFrame(() => { HLS.frame = 0; renderHL(); });
+}
+function hlOff() {
+  ED.ta.classList.remove('hl-on');
+  ED.hl.hidden = true;
+}
+function renderHL() {
+  const t = activeTab();
+  if (!t || t.kind !== 'text' || ED.cur !== t || ED.wrap.hidden || !setting('syntax', true)) { hlOff(); return; }
+  const lang = DashHL.langFor(t.path);
+  const v = ED.ta.value;
+  if (!lang || v.length > 2000000) { hlOff(); return; }
+  if (HLS.text !== v) { HLS.text = v; HLS.lines = v.split('\n'); }
+  const lines = HLS.lines;
+  const wrap = setting('wrap', false);
+  if (wrap && lines.length > 4000) { hlOff(); return; }
+  const ta = ED.ta;
+  const lh = parseFloat(getComputedStyle(ta).lineHeight) || 21;
+  let from = 0, to = lines.length;
+  if (!wrap) {
+    from = Math.max(0, Math.floor((ta.scrollTop - 8) / lh) - 40);
+    to = Math.min(lines.length, Math.ceil((ta.scrollTop + ta.clientHeight) / lh) + 40);
+  }
+  const html = DashHL.render(lang, lines, from, to);
+  ED.hlInner.style.paddingTop = (8 + from * lh) + 'px';
+  ED.hlInner.style.width = wrap ? ta.clientWidth + 'px' : '';
+  ED.hlInner.innerHTML = html.join('\n') + '\n';
+  ED.hlInner.style.transform = `translate(${-ta.scrollLeft}px, ${-ta.scrollTop}px)`;
+  ED.hl.classList.toggle('wrap', wrap);
+  ED.hl.hidden = false;
+  ta.classList.add('hl-on');
+  // current line
+  if (!wrap) {
+    const ln = v.slice(0, ta.selectionStart).split('\n').length;
+    ED.hlLine.style.top = (8 + (ln - 1) * lh - ta.scrollTop) + 'px';
+    ED.hlLine.style.height = lh + 'px';
+    ED.hlLine.hidden = ta.selectionStart !== ta.selectionEnd;
+  } else ED.hlLine.hidden = true;
+}
 let syncingPreview = false;
 function syncPreviewScroll() {
   const t = activeTab();
@@ -386,10 +439,12 @@ function renderEditor() {
     ED.wrap.classList.toggle('wrap', wrap);
     ED.ta.setAttribute('wrap', wrap ? 'soft' : 'off');
     ED.ta.style.tabSize = t.indent === '\t' ? 4 : (t.indent || '    ').length;
+    ED.hlInner.style.tabSize = ED.ta.style.tabSize;
     syncGutter();
     if (t.sel) ED.ta.setSelectionRange(t.sel[0], t.sel[1]); else ED.ta.setSelectionRange(0, 0);
     ED.ta.scrollTop = t.scroll || 0;
     syncGutterScroll();
+    renderHL();
     if (md && mode !== 'edit') {
       renderPreview(t);
       if (mode === 'preview') ED.preview.scrollTop = t.pscroll || 0;
@@ -413,6 +468,7 @@ function renderEditor() {
   }
   renderBreadcrumb();
   renderStatus();
+  if (currentView === 'sections') drawSections();
 }
 
 function renderBanner() {
@@ -442,6 +498,10 @@ function renderBreadcrumb() {
     if (i) bc.appendChild(h('span', { class: 'sep', html: icon('right') }));
     bc.appendChild(h('span', { class: 'seg', text: p }));
   });
+  if (t.kind === 'text') {
+    bc.appendChild(h('span', { class: 'bc-sec', title: 'Aller à une section (' + MOD + '+Maj+O)', onclick: () => sectionPicker() }));
+    updateBreadcrumbSection();
+  }
   if (t.kind === 'text' && isMd(t.path)) {
     const acts = h('span', { class: 'bc-actions' });
     for (const [m, label, title] of [['edit', 'Éditer', 'Éditeur seul'], ['split', 'Partagé', 'Éditeur + aperçu'], ['preview', 'Aperçu', 'Aperçu seul (' + MOD + '+Maj+V)']]) {
@@ -471,12 +531,14 @@ function renderPreview(t) {
     resolveImg: (src) => (/^(https?:|data:)/i.test(src) ? src : rawUrl(t.pid, resolveRel(t.path, src))),
   });
   ED.md.innerHTML = render(t.content);
+  decoratePreviewHeadings(t);
 }
 const schedulePreview = debounce(() => { const t = activeTab(); if (t && t.kind === 'text' && isMd(t.path) && t.mode !== 'edit') { syncingPreview = true; renderPreview(t); syncingPreview = false; syncPreviewScroll(); } }, 120);
 
 function onPreviewClick(e) {
   const t = activeTab();
   if (!t) return;
+  if (e.target.closest('.fold')) { onFoldClick(t, e.target); return; }
   const box = e.target.closest('input[type=checkbox][data-line]');
   if (box) {
     e.preventDefault();
@@ -518,6 +580,7 @@ function setTabContent(t, content) {
     ED.ta.setSelectionRange(s, e);
     ED.ta.scrollTop = sc;
     syncGutter();
+    scheduleHL();
     if (isMd(t.path) && t.mode !== 'edit') { renderPreview(t); ED.preview.scrollTop = ps; }
   }
   renderTabs();
@@ -539,7 +602,9 @@ function onEditorInput() {
   if (t.preview) { t.preview = false; renderTabs(); }
   else if (wasDirty !== isDirty(t)) renderTabs();
   syncGutter();
+  scheduleHL();
   schedulePreview();
+  refreshSectionsSoon();
   autosave();
   renderCursor();
 }
@@ -757,7 +822,7 @@ function cursorInfo() {
   const selLen = Math.abs(ED.ta.selectionEnd - ED.ta.selectionStart);
   return { ln, col, selLen };
 }
-const renderCursor = debounce(() => renderStatus(), 50);
+const renderCursor = debounce(() => { renderStatus(); scheduleHL(); onCursorSections(); }, 30);
 
 // ---------------------------------------------------------------- diff view
 function renderDiff(t) {
