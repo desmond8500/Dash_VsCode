@@ -290,7 +290,9 @@ function buildEditor() {
   ED.hlInner = h('div', { class: 'hl-inner' });
   ED.hlLine = h('div', { class: 'hl-curline' });
   ED.hl.append(ED.hlLine, ED.hlInner);
-  ED.main.append(ED.hl, ED.ta);
+  ED.cfxBg = h('div', { class: 'cfx-layer' });
+  ED.cfxBtns = h('div', { class: 'cfx-layer cfx-top' });
+  ED.main.append(ED.cfxBg, ED.hl, ED.ta, ED.cfxBtns);
   ED.wrap.append(ED.gutter, ED.main);
   window.addEventListener('resize', () => scheduleHL());
   ED.ta.addEventListener('focus', () => ED.hl.classList.add('focused'));
@@ -302,6 +304,8 @@ function buildEditor() {
   ED.other = h('div', { class: 'split' });
   ED.banner = h('div', { class: 'banner', hidden: true });
   host.append(ED.welcome, ED.split, ED.other, ED.banner);
+  ED.cbar = h('div', { class: 'cfx-bar', hidden: true });
+  host.before(ED.cbar);
 
   ED.ta.addEventListener('input', onEditorInput);
   ED.ta.addEventListener('scroll', () => { syncGutterScroll(); syncPreviewScroll(); scheduleHL(); });
@@ -337,7 +341,7 @@ function syncGutterScroll() { ED.gutter.scrollTop = ED.ta.scrollTop; }
 const HLS = { lines: null, text: null, lang: null, frame: 0 };
 function scheduleHL() {
   if (HLS.frame) return;
-  HLS.frame = requestAnimationFrame(() => { HLS.frame = 0; renderHL(); });
+  HLS.frame = requestAnimationFrame(() => { HLS.frame = 0; renderHL(); renderConflicts(); });
 }
 function hlOff() {
   ED.ta.classList.remove('hl-on');
@@ -468,6 +472,7 @@ function renderEditor() {
   }
   renderBreadcrumb();
   renderStatus();
+  renderConflicts();
   if (currentView === 'sections') drawSections();
 }
 

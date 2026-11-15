@@ -103,7 +103,8 @@ function renderStatus() {
   if (w && w.git && w.git.repo) {
     const g = w.git;
     const dirty = g.files.length ? '*' : '';
-    item(L, icon('branch') + esc((g.detached ? 'détachée' : g.branch) + dirty), 'Branche — cliquer pour changer', branchPicker);
+    item(L, icon('branch') + esc((g.detached ? (g.op === 'rebase' ? 'rebase' : 'détachée') : g.branch) + dirty), 'Branche — cliquer pour changer', branchPicker);
+    if (g.op) item(L, '⚠ ' + ({ merge: 'Fusion', rebase: 'Rebase', 'cherry-pick': 'Cherry-pick', revert: 'Revert' }[g.op]) + (g.conflicts ? ` : ${g.conflicts} conflit(s)` : ' : à terminer'), 'Opération git en cours — ouvrir la vue Git', () => showView('git'));
     item(L, icon('sync') + (g.behind ? ` ${g.behind}↓` : '') + (g.ahead ? ` ${g.ahead}↑` : ''), g.upstream ? `Synchroniser avec ${g.upstream}` : 'Publier la branche', () => gitOp(g.upstream ? 'git.sync' : 'git.push', {}, { title: g.upstream ? 'Synchronisation' : 'Publication' }));
   }
   if (P()) {
@@ -258,6 +259,7 @@ function settingsDialog() {
     sel('mdMode', 'Mode d’ouverture des fichiers Markdown', [['edit', 'Éditer'], ['split', 'Partagé (éditeur + aperçu)'], ['preview', 'Aperçu']], 'edit'),
     sel('fontSize', 'Taille de police de l’éditeur', [[12, '12'], [13, '13'], [14, '14'], [15, '15'], [16, '16'], [18, '18'], [20, '20']], 14),
     sel('indent', 'Indentation par défaut', [[2, '2 espaces'], [4, '4 espaces']], 4),
+    sel('pullMode', 'Pull / Synchroniser', [['merge', 'Fusionner (merge) — crée un commit de fusion si besoin'], ['rebase', 'Rebaser (rebase) — rejoue vos commits par-dessus'], ['ff-only', 'Avance rapide seulement — refuse si les branches ont divergé']], 'merge'),
     sel('updateMode', 'Mises à jour', [['auto', 'Automatiques (installées en arrière-plan, actives au prochain lancement)'], ['notify', 'Me prévenir seulement'], ['off', 'Désactivées']], 'auto'),
     h('div', { class: 'small muted', style: { marginTop: '12px', userSelect: 'text' } }, 'Configuration enregistrée dans : ' + S.app.dataDir));
   modal({
@@ -382,6 +384,9 @@ function registerCommands() {
   cmd('tasks.open', 'Tâches : ouvrir le fichier des tâches', () => openFile(todoFile(), { preview: false }), '', hasP);
   cmd('git.commit', 'Git : commit', () => { showView('git'); setTimeout(() => $('.git-msg-input') && $('.git-msg-input').focus(), 100); }, '', hasGit);
   cmd('git.generate', 'Git : générer le message de commit', () => { showView('git'); setTimeout(() => generateCommitMessage(), 150); }, '', hasGit);
+  cmd('git.continue', 'Git : terminer la fusion / continuer', () => continueOperation(), '', () => hasGit() && !!W().git.op);
+  cmd('git.abort', 'Git : annuler la fusion / le rebase', () => abortOperation(), '', () => hasGit() && !!W().git.op);
+  cmd('git.nextConflict', 'Git : conflit suivant', () => { const t = activeTab(); if (t && t.kind === 'text') gotoConflict(t, 1); }, '', () => !!activeTab());
   cmd('git.pull', 'Git : pull', () => gitOp('git.pull', {}, { title: 'Pull' }), '', hasGit);
   cmd('git.push', 'Git : push', () => gitOp('git.push', {}, { title: 'Push' }), '', hasGit);
   cmd('git.sync', 'Git : synchroniser (pull + push)', () => gitOp('git.sync', {}, { title: 'Synchronisation' }), '', hasGit);

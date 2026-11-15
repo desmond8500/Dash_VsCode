@@ -3,6 +3,22 @@
 Chaque version publiée correspond à un tag `vX.Y.Z`. La section de ce fichier qui porte ce numéro
 sert de notes de version : elle s'affiche dans Dash Lite (fenêtre *Mises à jour → Nouveautés*).
 
+## [1.2.0] - 2026-11-15
+
+### Ajouté
+- **Résolution des conflits git** :
+  - dans l'éditeur, chaque conflit est coloré (version actuelle en vert, entrante en bleu) avec les boutons
+    *Garder l'actuelle / Garder l'entrante / Garder les deux / Aucune* ; barre de conflits avec navigation ▲▼ et
+    « Tout résoudre » ; `Ctrl+Z` annule chaque choix ;
+  - vue Git : section **Conflits** (fichier entier côté actuel ou entrant, marquer comme résolu) et encadré
+    **Fusion / Rebase en cours** avec *Terminer* et *Annuler* ;
+  - garde-fou : impossible de marquer comme résolu un fichier qui contient encore des marqueurs sans confirmation ;
+  - opération en cours et nombre de conflits dans la barre d'état.
+- Réglage **Pull / Synchroniser** : fusion (par défaut), rebase ou avance rapide seulement.
+
+### Corrigé
+- `Pull` ne s'arrête plus sur « divergent branches » avec les versions récentes de git (mode explicite).
+
 ## [1.1.0] - 2026-11-15
 
 ### Ajouté

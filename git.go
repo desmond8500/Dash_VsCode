@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,7 +26,8 @@ func runGit(dir string, timeout time.Duration, args ...string) (string, error) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_OPTIONAL_LOCKS=0", "GCM_INTERACTIVE=auto")
+	// no interactive editor ever: merge/rebase/cherry-pick keep their prepared messages
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_OPTIONAL_LOCKS=0", "GCM_INTERACTIVE=auto", "GIT_EDITOR=true", "GIT_MERGE_AUTOEDIT=no")
 	hideWindow(cmd)
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
@@ -79,6 +82,10 @@ type gitStatus struct {
 	Files    []gitFile `json:"files"`
 	Remotes  []string  `json:"remotes"`
 	NoCommit bool      `json:"noCommit"`
+	Op       string    `json:"op,omitempty"` // merge | rebase | cherry-pick | revert
+	OpInfo   string    `json:"opInfo,omitempty"`
+	MergeMsg string    `json:"mergeMsg,omitempty"`
+	Conflict int       `json:"conflicts"`
 	Error    string    `json:"error,omitempty"`
 }
 
@@ -142,12 +149,15 @@ func statusOf(dir string) gitStatus {
 			if len(f) == 11 {
 				gf := mkFile(f[1], f[10], "")
 				gf.Conflict = true
+				gf.Staged, gf.Unstaged = false, false // listed apart, in "Conflicts"
 				st.Files = append(st.Files, gf)
+				st.Conflict++
 			}
 		case strings.HasPrefix(r, "? "):
 			st.Files = append(st.Files, gitFile{Path: r[2:], X: "?", Y: "?", Untracked: true, Unstaged: true})
 		}
 	}
+	st.Op, st.OpInfo, st.MergeMsg = repoOperation(dir)
 	if rem, err := gitOut(dir, "remote"); err == nil {
 		for _, l := range strings.Split(strings.TrimSpace(rem), "\n") {
 			if l = strings.TrimSpace(l); l != "" {
@@ -156,6 +166,77 @@ func statusOf(dir string) gitStatus {
 		}
 	}
 	return st
+}
+
+func gitDir(dir string) string {
+	out, err := gitOut(dir, "rev-parse", "--git-dir")
+	if err != nil {
+		return ""
+	}
+	gd := strings.TrimSpace(out)
+	if !filepath.IsAbs(gd) {
+		gd = filepath.Join(dir, gd)
+	}
+	return gd
+}
+
+// repoOperation tells whether a merge, rebase, cherry-pick or revert is in progress.
+func repoOperation(dir string) (op, info, msg string) {
+	gd := gitDir(dir)
+	if gd == "" {
+		return
+	}
+	has := func(name string) bool { _, err := os.Stat(filepath.Join(gd, name)); return err == nil }
+	read := func(name string) string {
+		b, _ := os.ReadFile(filepath.Join(gd, name))
+		return strings.TrimSpace(string(b))
+	}
+	switch {
+	case has("rebase-merge") || has("rebase-apply"):
+		op = "rebase"
+		sub := "rebase-merge"
+		if !has(sub) {
+			sub = "rebase-apply"
+		}
+		head := strings.TrimPrefix(read(sub+"/head-name"), "refs/heads/")
+		onto := read(sub + "/onto")
+		if len(onto) > 8 {
+			onto = onto[:8]
+		}
+		if n, t := read(sub+"/msgnum"), read(sub+"/end"); n != "" && t != "" {
+			info = fmt.Sprintf("%s sur %s — commit %s/%s", head, onto, n, t)
+		} else {
+			info = head + " sur " + onto
+		}
+	case has("MERGE_HEAD"):
+		op = "merge"
+		info = mergeSource(read("MERGE_MSG"))
+	case has("CHERRY_PICK_HEAD"):
+		op = "cherry-pick"
+		h := read("CHERRY_PICK_HEAD")
+		if len(h) > 8 {
+			h = h[:8]
+		}
+		info = h
+	case has("REVERT_HEAD"):
+		op = "revert"
+	}
+	if op == "merge" || op == "cherry-pick" || op == "revert" {
+		var lines []string
+		for _, l := range strings.Split(read("MERGE_MSG"), "\n") {
+			if !strings.HasPrefix(l, "#") {
+				lines = append(lines, l)
+			}
+		}
+		msg = strings.TrimSpace(strings.Join(lines, "\n"))
+	}
+	return
+}
+
+func mergeSource(msg string) string {
+	first := strings.SplitN(msg, "\n", 2)[0]
+	first = strings.TrimPrefix(first, "Merge ")
+	return first
 }
 
 func mkFile(xy, path, orig string) gitFile {
@@ -290,6 +371,11 @@ func (a *App) registerGit() {
 		if err != nil {
 			return nil, err
 		}
+		if force, _ := bind[struct{ Force bool }](raw); !force.Force {
+			if left := filesWithMarkers(p, paths); len(left) > 0 {
+				return nil, &apiError{409, "MARKERS:" + strings.Join(left, "\n")}
+			}
+		}
 		args := []string{"add", "-A", "--"}
 		if len(paths) == 0 {
 			paths = []string{"."}
@@ -392,7 +478,7 @@ func (a *App) registerGit() {
 		if err != nil {
 			return nil, err
 		}
-		return op(p.Path, 5*time.Minute, "pull", "--no-edit")
+		return op(p.Path, 5*time.Minute, pullArgs(a.pullMode())...)
 	})
 
 	a.register("git.fetch", func(raw json.RawMessage) (any, error) {
@@ -408,7 +494,7 @@ func (a *App) registerGit() {
 		if err != nil {
 			return nil, err
 		}
-		return syncRepo(p.Path, false), nil
+		return syncRepo(p.Path, a.pullMode()), nil
 	})
 
 	a.register("git.syncAll", func(raw json.RawMessage) (any, error) {
@@ -438,7 +524,7 @@ func (a *App) registerGit() {
 					if st.Upstream == "" {
 						r.Status, r.Output = "skipped", "pas de branche amont"
 					} else {
-						o := syncRepo(p.Path, true)
+						o := syncRepo(p.Path, "ff-only")
 						r.Output = o.Output
 						r.Status = "ok"
 						if !o.OK {
@@ -606,12 +692,28 @@ func (a *App) registerGit() {
 	})
 }
 
-// syncRepo pulls then pushes. safe=true → fast-forward only, never merges.
-func syncRepo(dir string, safe bool) opResult {
-	pull := []string{"pull", "--no-edit"}
-	if safe {
-		pull = []string{"pull", "--ff-only"}
+func (a *App) pullMode() string {
+	a.store.mu.Lock()
+	defer a.store.mu.Unlock()
+	if v, ok := a.store.cfg.Settings["pullMode"].(string); ok && (v == "merge" || v == "rebase" || v == "ff-only") {
+		return v
 	}
+	return "merge"
+}
+
+func pullArgs(mode string) []string {
+	switch mode {
+	case "rebase":
+		return []string{"pull", "--rebase"}
+	case "ff-only":
+		return []string{"pull", "--ff-only"}
+	}
+	return []string{"pull", "--no-rebase", "--no-edit"}
+}
+
+// syncRepo pulls (merge, rebase or fast-forward only) then pushes.
+func syncRepo(dir string, mode string) opResult {
+	pull := pullArgs(mode)
 	out1, err := runGit(dir, 5*time.Minute, pull...)
 	if err != nil {
 		return opResult{false, "$ git " + strings.Join(pull, " ") + "\n" + out1}
@@ -622,4 +724,121 @@ func syncRepo(dir string, safe bool) opResult {
 	}
 	out2, err := runGit(dir, 5*time.Minute, args...)
 	return opResult{err == nil, "$ git " + strings.Join(pull, " ") + "\n" + out1 + "\n$ git " + strings.Join(args, " ") + "\n" + out2}
+}
+
+var markerStart = regexp.MustCompile(`(?m)^<{7}( |$)`)
+var markerEnd = regexp.MustCompile(`(?m)^>{7}( |$)`)
+
+// filesWithMarkers returns the conflicted files (among paths, or all) that still contain conflict markers.
+func filesWithMarkers(p *Project, paths []string) []string {
+	st := statusOf(p.Path)
+	want := map[string]bool{}
+	for _, x := range paths {
+		want[x] = true
+	}
+	var left []string
+	for _, f := range st.Files {
+		if !f.Conflict || (len(paths) > 0 && !want[f.Path] && !(len(paths) == 1 && paths[0] == ".")) {
+			continue
+		}
+		abs, err := p.resolve(f.Path)
+		if err != nil {
+			continue
+		}
+		data, err := os.ReadFile(abs)
+		if err == nil && markerStart.Match(data) && markerEnd.Match(data) {
+			left = append(left, f.Path)
+		}
+	}
+	return left
+}
+
+func (a *App) registerConflicts() {
+	a.register("git.resolveFile", func(raw json.RawMessage) (any, error) {
+		req, err := bind[struct {
+			P    string `json:"p"`
+			Path string `json:"path"`
+			Side string `json:"side"` // current | incoming
+		}](raw)
+		if err != nil {
+			return nil, err
+		}
+		p, err := a.proj(req.P)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.resolve(req.Path); err != nil {
+			return nil, badRequest("%v", err)
+		}
+		// "current" is HEAD's side (--ours) and "incoming" the other one (--theirs), as in the markers.
+		flag := "--ours"
+		if req.Side == "incoming" {
+			flag = "--theirs"
+		}
+		out, err := runGit(p.Path, time.Minute, "checkout", flag, "--", req.Path)
+		if err != nil {
+			// this side deleted the file: keeping it means deleting it
+			if strings.Contains(out, "does not have") {
+				out2, err2 := runGit(p.Path, time.Minute, "rm", "-q", "--", req.Path)
+				return opResult{err2 == nil, out2}, nil
+			}
+			return opResult{false, out}, nil
+		}
+		out, err = runGit(p.Path, time.Minute, "add", "--", req.Path)
+		return opResult{err == nil, out}, nil
+	})
+
+	a.register("git.abort", func(raw json.RawMessage) (any, error) {
+		req, err := bind[struct {
+			P string `json:"p"`
+		}](raw)
+		if err != nil {
+			return nil, err
+		}
+		p, err := a.proj(req.P)
+		if err != nil {
+			return nil, err
+		}
+		op, _, _ := repoOperation(p.Path)
+		if op == "" {
+			return opResult{false, "aucune opération en cours"}, nil
+		}
+		out, err := runGit(p.Path, 2*time.Minute, op, "--abort")
+		return opResult{err == nil, out}, nil
+	})
+
+	a.register("git.continue", func(raw json.RawMessage) (any, error) {
+		req, err := bind[struct {
+			P       string `json:"p"`
+			Message string `json:"message"`
+		}](raw)
+		if err != nil {
+			return nil, err
+		}
+		p, err := a.proj(req.P)
+		if err != nil {
+			return nil, err
+		}
+		op, _, _ := repoOperation(p.Path)
+		if st := statusOf(p.Path); st.Conflict > 0 {
+			return opResult{false, fmt.Sprintf("Il reste %d fichier(s) en conflit : résolvez-les puis marquez-les comme résolus (+).", st.Conflict)}, nil
+		}
+		var out string
+		switch op {
+		case "merge":
+			args := []string{"commit", "--no-edit"}
+			if m := strings.TrimSpace(req.Message); m != "" {
+				args = []string{"commit", "-m", m}
+			}
+			out, err = runGit(p.Path, 2*time.Minute, args...)
+		case "rebase", "cherry-pick", "revert":
+			out, err = runGit(p.Path, 5*time.Minute, op, "--continue")
+			if err != nil && op != "rebase" && strings.Contains(out, "nothing to commit") {
+				out, err = runGit(p.Path, time.Minute, op, "--skip")
+			}
+		default:
+			return opResult{false, "aucune opération en cours"}, nil
+		}
+		return opResult{err == nil, out}, nil
+	})
 }
