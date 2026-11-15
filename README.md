@@ -40,13 +40,20 @@ Le dossier de l'exécutable doit être modifiable (sinon Dash Lite indique la pa
 
 ### Publier une nouvelle version
 
+Les versions suivent `MAJEUR.MINEUR.CORRECTIF` (ex. `1.2.0` pour des nouveautés, `1.1.1` pour une correction).
+
+1. Décrivez les changements dans `CHANGELOG.md` sous un titre `## [1.2.0] - AAAA-MM-JJ`.
+2. Mettez le même numéro dans `server.go` (`var appVersion = "1.2.0"`), pour les compilations locales.
+3. Committez, puis créez et poussez le tag :
+
 ```bash
 git tag v1.2.0
-git push origin v1.2.0
+git push origin main v1.2.0
 ```
 
 Le workflow GitHub Actions `.github/workflows/release.yml` compile alors les exécutables Windows et Linux avec ce numéro
-de version, calcule `SHA256SUMS` et crée la Release. Les copies installées la récupèrent toutes seules.
+de version, calcule `SHA256SUMS` et crée la Release, avec la section du `CHANGELOG.md` comme notes de version.
+Les copies installées la récupèrent toutes seules. La version en cours s'affiche en bas à droite (cliquez pour les mises à jour).
 
 ### Premier lancement (application non signée)
 

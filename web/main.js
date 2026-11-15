@@ -130,7 +130,7 @@ function renderStatus() {
     item(R, setting('autosave', false) ? icon('check') + ' Enreg. auto' : 'Enreg. auto : non', 'Enregistrement automatique — cliquer pour basculer', toggleAutosave);
   }
   updateStatusItem(L, item);
-  item(R, icon('bell'), 'Dash Lite ' + VERSION, () => runCmd('app.about'));
+  item(R, icon('bell') + ' v' + VERSION, 'Dash Lite ' + VERSION + ' — mises à jour', () => updateDialog());
 }
 
 function toggleWrap() { storeEditorState(); setSetting('wrap', !setting('wrap', false)); renderEditor(); }
