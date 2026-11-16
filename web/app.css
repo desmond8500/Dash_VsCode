@@ -394,6 +394,29 @@ pre.output { background: #1a1a1a; border: 1px solid #333; padding: 8px 10px; fon
 .proj-row.active .txt .n { color: #fff; font-weight: 600; }
 .proj-row .warn { color: var(--yellow); font-size: 11px; }
 .kbd-table td { padding: 3px 8px; }
+.cfx-layer { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.cfx-layer.cfx-top { z-index: 3; }
+.cfx-band { position: absolute; left: 0; right: 0; }
+.cfx-cur-h { background: rgba(64, 200, 174, .5); } .cfx-cur { background: rgba(64, 200, 174, .2); }
+.cfx-inc-h { background: rgba(64, 166, 255, .5); } .cfx-inc { background: rgba(64, 166, 255, .2); }
+.cfx-sep { background: rgba(128, 128, 128, .25); } .cfx-base { background: rgba(160, 160, 160, .12); }
+.cfx-actions { position: absolute; right: 24px; display: flex; align-items: center; gap: 4px; pointer-events: auto; }
+.cfx-btn { font-size: 11px; padding: 0 8px; height: 18px; border-radius: 3px; background: rgba(30,30,30,.92); border: 1px solid #555; color: #ddd; }
+.cfx-btn:hover { background: #0e639c; border-color: #0e639c; color: #fff; }
+.cfx-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 5px 12px; background: #2d2a1e; border-bottom: 1px solid #5a4b20; font-size: 12px; flex: none; }
+.cfx-bar .grow { flex: 1; }
+.cfx-bar .btn { height: 22px; padding: 0 10px; font-size: 12px; }
+.cfx-title { display: flex; align-items: center; gap: 6px; color: #e2c08d; }
+.cfx-title.ok { color: var(--green); }
+.cfx-legend { display: flex; align-items: center; gap: 5px; color: var(--fg-dim); margin-left: 6px; }
+.cfx-legend .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-left: 6px; }
+.cfx-legend .sw.cur { background: rgba(64, 200, 174, .7); } .cfx-legend .sw.inc { background: rgba(64, 166, 255, .7); }
+.cfx-hint { width: 100%; color: var(--fg-dim); }
+.git-op { margin: 6px 12px 4px; padding: 8px 10px; border: 1px solid #806120; background: #2d2a1e; border-radius: 4px; }
+.git-op.ready { border-color: #2f6b3a; background: #1e2a20; }
+.git-op-title { display: flex; align-items: center; gap: 6px; color: #e2c08d; }
+.git-op.ready .git-op-title { color: var(--green); }
+.cfx-head { color: #f48771; }
 .sec-row { gap: 4px; }
 .sec-lvl { font-size: 9px; color: var(--fg-dim); border: 1px solid #4a4a4a; border-radius: 3px; padding: 0 3px; line-height: 13px; flex: none; }
 .sec-count { font-size: 11px; color: var(--fg-dim); flex: none; }

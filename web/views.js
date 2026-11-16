@@ -433,6 +433,7 @@ async function refreshGit() {
   } catch { return; }
   setBadge('git', w.git.repo ? w.git.files.length : 0);
   renderStatus();
+  if (S.pid === pid) renderConflicts();
   if (currentView === 'git' && S.pid === pid) drawGit();
   if (currentView === 'explorer' && S.pid === pid) drawTree();
 }
@@ -445,7 +446,17 @@ async function gitOp(name, body, { title, silent, refresh = true } = {}) {
   try {
     const r = await api(name, { p: S.pid, ...body });
     t && t.remove();
-    if (r && r.ok === false) { showOutput((title || name) + ' — échec', r.output, false); return false; }
+    if (r && r.ok === false) {
+      if (/CONFLICT|conflit|Merge conflict|could not apply/i.test(r.output || '')) {
+        await refreshGit();
+        showView('git');
+        toast('Conflits à résoudre : ouvrez les fichiers de la section « Conflits ».', 'err', 8000);
+        showOutput((title || name) + ' — conflits', r.output, false);
+        return false;
+      }
+      showOutput((title || name) + ' — échec', r.output, false);
+      return false;
+    }
     if (!silent) toast((title || name) + ' : terminé' + (r && r.output ? '\n' + r.output.split('\n').slice(-3).join('\n') : ''), 'ok', 3500);
     return r || true;
   } catch (e) {
@@ -527,8 +538,9 @@ function drawGit() {
     g.upstream ? h('span', { class: 'muted', title: 'Branche amont', text: g.upstream }) : h('span', { class: 'muted', text: g.remotes.length ? 'pas de branche amont' : 'aucun remote' }),
     g.behind ? h('span', { title: 'Commits à récupérer', text: '↓' + g.behind }) : null,
     g.ahead ? h('span', { title: 'Commits à pousser', text: '↑' + g.ahead }) : null);
+  if (g.op === 'merge' && !GIT.msg[S.pid] && g.mergeMsg) GIT.msg[S.pid] = g.mergeMsg;
   const ta = h('textarea', { class: 'textarea git-msg-input', rows: '2', placeholder: `Message de commit — ✨ pour le générer, ${MOD}+Entrée pour valider`, spellcheck: 'false' });
-  ta.value = msgVal;
+  ta.value = GIT.msg[S.pid] || msgVal;
   ta.addEventListener('input', () => (GIT.msg[S.pid] = ta.value));
   ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); doCommit(false); } });
   const staged = g.files.filter((f) => f.staged);
@@ -543,7 +555,26 @@ function drawGit() {
     h('button', { class: 'btn secondary', html: icon('push') + 'Push', onclick: () => gitOp('git.push', {}, { title: 'Push' }) }),
     h('button', { class: 'btn secondary', html: icon('sync') + 'Sync', title: 'Pull puis push', onclick: () => gitOp('git.sync', {}, { title: 'Synchronisation' }) }),
     h('button', { class: 'btn secondary', html: icon('fetch'), title: 'Fetch', onclick: () => gitOp('git.fetch', {}, { title: 'Fetch' }) }));
-  body.append(br, msg, tools);
+  body.append(br);
+  const opBox = gitOperationBox(g);
+  if (opBox) body.appendChild(opBox);
+  body.append(msg, tools);
+  const conflicted = g.files.filter((f) => f.conflict);
+  if (conflicted.length) {
+    const sc = section('conflicts', 'Conflits', conflicted.length, [{ icon: 'plus', title: 'Marquer tout comme résolu', action: () => markResolved(conflicted.map((f) => f.path)) }], GIT.collapsed);
+    sc.head.classList.add('cfx-head');
+    body.appendChild(sc.head);
+    if (!sc.col) for (const f of conflicted) {
+      const deletedHere = f.x === 'D' && f.y === 'D';
+      body.appendChild(h('div', { class: 'row', style: { paddingLeft: '20px' }, title: f.path + ' — ' + conflictKind(f), onclick: (e) => { if (!e.target.closest('.acts')) { if (!deletedHere) openFile(f.path, { preview: false }); } } },
+        h('span', { html: fileIcon(basename(f.path)) }), h('span', { class: 'name gs-U', text: basename(f.path) }), h('span', { class: 'desc', text: conflictKind(f) }),
+        h('span', { class: 'acts' },
+          h('button', { class: 'icon-btn', title: 'Garder le fichier entier, version actuelle', text: 'A', onclick: () => resolveWholeFile(f, 'current') }),
+          h('button', { class: 'icon-btn', title: 'Garder le fichier entier, version entrante', text: 'E', onclick: () => resolveWholeFile(f, 'incoming') }),
+          h('button', { class: 'icon-btn', title: 'Marquer comme résolu (indexer)', html: icon('plus'), onclick: () => markResolved([f.path]) })),
+        h('span', { class: 'st gs-U', text: '!' })));
+    }
+  }
 
   const fileRow = (f, isStaged) => {
     const letter = f.conflict ? 'U' : f.untracked ? 'U' : isStaged ? f.x : f.y;
@@ -644,7 +675,8 @@ async function doCommit(push) {
     return;
   }
   const staged = g.files.filter((f) => f.staged).length;
-  if (!g.files.length) { toast('Rien à valider.', ''); return; }
+  if (g.conflicts) { toast(`Il reste ${g.conflicts} fichier(s) en conflit à résoudre avant de valider.`, 'err', 5000); return; }
+  if (!g.files.length && !g.op) { toast('Rien à valider.', ''); return; }
   // unsaved editors would be left out
   const dirty = w.tabs.filter(isDirty);
   if (dirty.length) {

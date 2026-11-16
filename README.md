@@ -127,6 +127,22 @@ sur votre machine (npm, php, composer, python, flutter…).
 - **Tout synchroniser** (barre de titre) : `pull --ff-only` puis `push` sur tous les projets git, en toute sécurité
   (aucun merge automatique ; les projets sans branche amont sont ignorés).
 
+#### Conflits
+Quand un *Pull* (ou *Sync*) produit des conflits, la vue Git affiche un encadré **Fusion en cours** (ou *Rebase en cours*)
+et une section **Conflits** :
+
+1. Ouvrez un fichier en conflit : chaque bloc est coloré (vert = version **actuelle**, bleu = version **entrante**) avec
+   les boutons *Garder l'actuelle*, *Garder l'entrante*, *Garder les deux* ou *Aucune*. La barre au-dessus de l'éditeur
+   permet de passer d'un conflit à l'autre (▲▼) ou de tout résoudre d'un coup. `Ctrl+Z` annule un choix.
+2. Quand il n'y a plus de marqueurs, cliquez **Marquer comme résolu** (le fichier est enregistré et indexé).
+   Dans la section Conflits, **A** / **E** prennent le fichier entier côté actuel / entrant.
+3. Cliquez **Terminer la fusion** (le message de fusion préparé par git est repris), ou **Annuler** pour revenir
+   à l'état d'avant le pull.
+
+En rebase, « actuelle » est la branche sur laquelle vos commits sont rejoués (en général la distante) et « entrante »
+votre propre commit. Le mode de *Pull* (fusion, rebase ou avance rapide seulement) se choisit dans les Paramètres ;
+**Tout synchroniser** reste toujours en avance rapide et ne crée donc jamais de conflit.
+
 L'authentification git utilise votre configuration habituelle (clé SSH ou gestionnaire d'identifiants). Dash ne demande
 jamais de mot de passe : si une opération échoue pour cette raison, configurez SSH ou `git config --global credential.helper`.
 
@@ -184,6 +200,7 @@ fsapi.go        fichiers, recherche, tâches Markdown
 runs.go         terminal et sessions de commandes (flux SSE)
 git.go          opérations git
 commitmsg.go    rédaction automatique des messages de commit
+                (conflits : git.go côté serveur, web/conflicts.js côté interface)
 detect.go       détection des commandes par type de projet
 proc_*.go       spécificités Windows / Unix
 web/            interface (HTML/CSS/JS sans dépendance, intégrée dans l'exécutable)
