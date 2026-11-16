@@ -80,7 +80,10 @@ sur votre machine (npm, php, composer, python, flutter…).
 - Éditeur avec **coloration syntaxique** (JavaScript/TypeScript, JSON, PHP/Blade, Python, Go, Rust, Java, Kotlin, C#, C/C++,
   Dart, Swift, HTML/XML/Vue, CSS/SCSS, Markdown, YAML, TOML/INI/.env, Shell, PowerShell, Batch, SQL, Dockerfile, Makefile),
   ligne courante surlignée, numéros de ligne, indentation détectée, `Tab`/`Maj+Tab`, `Alt+↑/↓` déplacer la ligne, `Ctrl+D` dupliquer,
-  `Ctrl+/` commenter, retour à la ligne (`Alt+Z`), `Ctrl+G` aller à la ligne, conserve CRLF/BOM/Latin-1.
+  `Ctrl+X` / `Ctrl+C` sans sélection pour couper / copier la ligne, `Ctrl+Maj+D` copier la ligne, `Ctrl+/` commenter,
+  `Ctrl+G` aller à la ligne, conserve CRLF/BOM/Latin-1.
+- **Retour à la ligne automatique** (activé par défaut, `Alt+Z` pour basculer) : les lignes longues passent à la ligne au
+  bord de la fenêtre, les numéros de ligne restent alignés.
 - **Détection des conflits** : si git ou un autre programme modifie un fichier ouvert, il est rechargé s'il n'a pas de
   modifications ; sinon Dash propose de recharger ou d'écraser.
 - Enregistrement automatique optionnel (barre d'état). Images affichées dans un onglet dédié.
@@ -88,6 +91,9 @@ sur votre machine (npm, php, composer, python, flutter…).
 ### Markdown et TODO
 - Modes **Éditer / Partagé / Aperçu** (`Ctrl+Maj+V`) : titres, tableaux, listes imbriquées, blocs de code, citations et
   encadrés `> [!NOTE]`, images relatives, liens entre fichiers `.md` (cliquables).
+- **Barre d'outils Markdown** au-dessus de l'éditeur : titres, gras, italique, barré, code, listes (puces, numéros,
+  tâches), citation, lien, image, bloc de code, tableau, ligne horizontale, encadrés `> [!NOTE]`… Un second clic retire
+  la mise en forme ; `Ctrl+Z` annule.
 - **Cases à cocher cliquables** dans l'aperçu (enregistrées immédiatement si le fichier était propre).
 - `Entrée` continue la liste (et ajoute `[ ]` après une tâche), `Ctrl+Entrée` coche/décoche la ligne courante.
 - Vue **Tâches** (`Ctrl+Maj+X`) : toutes les `- [ ]` du projet, groupées par fichier et par titre, avec progression,
@@ -156,6 +162,10 @@ jamais de mot de passe : si une opération échoue pour cette raison, configurez
 | Lancer une commande | `Ctrl+Maj+B` |
 | Enregistrer / tout enregistrer | `Ctrl+S` / `Ctrl+Maj+S` |
 | Cocher une tâche | `Ctrl+Entrée` |
+| Couper / copier la ligne (sans sélection) | `Ctrl+X` / `Ctrl+C` |
+| Copier la ligne | `Ctrl+Maj+D` |
+| Dupliquer la ligne | `Ctrl+D` |
+| Retour à la ligne automatique | `Alt+Z` |
 | Aperçu Markdown | `Ctrl+Maj+V` |
 | Terminal | ``Ctrl+` `` ou `Ctrl+J` |
 | Barre latérale | `Ctrl+B` |

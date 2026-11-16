@@ -127,14 +127,14 @@ function renderStatus() {
     item(R, langOf(t.path), null, null);
   }
   if (P()) {
-    item(R, setting('wrap', false) ? icon('wrap') + ' Retour ligne' : icon('wrap'), 'Retour à la ligne automatique (Alt+Z)', toggleWrap);
+    item(R, setting('wrap', true) ? icon('wrap') + ' Retour ligne' : icon('wrap'), 'Retour à la ligne automatique (Alt+Z)', toggleWrap);
     item(R, setting('autosave', false) ? icon('check') + ' Enreg. auto' : 'Enreg. auto : non', 'Enregistrement automatique — cliquer pour basculer', toggleAutosave);
   }
   updateStatusItem(L, item);
   item(R, icon('bell') + ' v' + VERSION, 'Dash Lite ' + VERSION + ' — mises à jour', () => updateDialog());
 }
 
-function toggleWrap() { storeEditorState(); setSetting('wrap', !setting('wrap', false)); renderEditor(); }
+function toggleWrap() { storeEditorState(); setSetting('wrap', !setting('wrap', true)); renderEditor(); }
 function toggleAutosave() {
   const v = !setting('autosave', false);
   setSetting('autosave', v);
@@ -253,7 +253,7 @@ function settingsDialog() {
   };
   const body = h('div', null,
     chk('autosave', 'Enregistrement automatique (1 s après la dernière frappe)', false),
-    chk('wrap', 'Retour à la ligne automatique dans l’éditeur', false),
+    chk('wrap', 'Retour à la ligne automatique dans l’éditeur', true),
     chk('syntax', 'Coloration syntaxique', true),
     chk('previewTabs', 'Onglets d’aperçu (un clic simple remplace l’onglet en italique)', true),
     sel('mdMode', 'Mode d’ouverture des fichiers Markdown', [['edit', 'Éditer'], ['split', 'Partagé (éditeur + aperçu)'], ['preview', 'Aperçu']], 'edit'),
@@ -297,7 +297,7 @@ function shortcutsDialog() {
     ['Enregistrer / tout enregistrer', 'Ctrl+S / Ctrl+Maj+S'], ['Cocher une tâche (Markdown)', 'Ctrl+Entrée'], ['Aperçu Markdown', 'Ctrl+Maj+V'],
     ['Terminal', 'Ctrl+`  (ou Ctrl+J)'], ['Aller à une section', 'Ctrl+Maj+O'], ['Barre latérale', 'Ctrl+B'], ['Explorateur / Recherche / Git / Tâches', 'Ctrl+Maj+E / F / G / X'],
     ['Fermer l’onglet / Nouveau fichier', 'Alt+W / Alt+N'], ['Aller à l’onglet n', 'Alt+1…9'], ['Aller à la ligne', 'Ctrl+G'], ['Retour à la ligne', 'Alt+Z'],
-    ['Déplacer la ligne', 'Alt+↑ / Alt+↓'], ['Dupliquer la ligne', 'Ctrl+D'], ['Commenter', 'Ctrl+/'], ['Rechercher dans le fichier', 'Ctrl+F (navigateur)'],
+    ['Déplacer la ligne', 'Alt+↑ / Alt+↓'], ['Dupliquer la ligne', 'Ctrl+D'], ['Couper / copier la ligne (sans sélection)', 'Ctrl+X / Ctrl+C'], ['Copier la ligne', 'Ctrl+Maj+D'], ['Commenter', 'Ctrl+/'], ['Rechercher dans le fichier', 'Ctrl+F (navigateur)'],
     ['Terminal : arrêter / effacer / compléter', 'Ctrl+C / Ctrl+L / Tab'],
   ];
   modal({ title: 'Raccourcis clavier', body: '<table class="kbd-table">' + rows.map(([a, b]) => `<tr><td>${esc(a)}</td><td><kbd>${esc(b.replace(/Ctrl/g, MOD))}</kbd></td></tr>`).join('') + '</table>', buttons: [{ label: 'Fermer', primary: true, value: true }] });

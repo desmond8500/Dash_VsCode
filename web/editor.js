@@ -292,9 +292,15 @@ function buildEditor() {
   ED.hl.append(ED.hlLine, ED.hlInner);
   ED.cfxBg = h('div', { class: 'cfx-layer' });
   ED.cfxBtns = h('div', { class: 'cfx-layer cfx-top' });
-  ED.main.append(ED.cfxBg, ED.hl, ED.ta, ED.cfxBtns);
+  ED.measure = h('div', { class: 'ed-measure', 'aria-hidden': 'true' });
+  ED.main.append(ED.cfxBg, ED.hl, ED.ta, ED.cfxBtns, ED.measure);
   ED.wrap.append(ED.gutter, ED.main);
-  window.addEventListener('resize', () => scheduleHL());
+  window.addEventListener('resize', () => { scheduleHL(); scheduleGutter(); });
+  // the editor width also changes with the sidebar, the sashes and the split preview
+  if (window.ResizeObserver) {
+    let lastW = 0;
+    new ResizeObserver(() => { const w = ED.ta.clientWidth; if (w && w !== lastW) { lastW = w; scheduleGutter(); scheduleHL(); } }).observe(ED.ta);
+  }
   ED.ta.addEventListener('focus', () => ED.hl.classList.add('focused'));
   ED.ta.addEventListener('blur', () => ED.hl.classList.remove('focused'));
   ED.preview = h('div', { class: 'preview' });
@@ -306,8 +312,13 @@ function buildEditor() {
   host.append(ED.welcome, ED.split, ED.other, ED.banner);
   ED.cbar = h('div', { class: 'cfx-bar', hidden: true });
   host.before(ED.cbar);
+  ED.mdbar = buildMdToolbar();
+  host.before(ED.mdbar);
 
   ED.ta.addEventListener('input', onEditorInput);
+  ED.ta.addEventListener('copy', onClipboardEvent);
+  ED.ta.addEventListener('cut', onClipboardEvent);
+  ED.ta.addEventListener('paste', onPasteLine);
   ED.ta.addEventListener('scroll', () => { syncGutterScroll(); syncPreviewScroll(); scheduleHL(); });
   ED.ta.addEventListener('keydown', onEditorKey);
   for (const ev of ['keyup', 'click', 'select', 'focus']) ED.ta.addEventListener(ev, () => renderCursor());
@@ -322,9 +333,15 @@ function buildEditor() {
 }
 
 let lastGutterCount = -1;
+let lastGutterKey = '';
+function wrapOn() { return setting('wrap', true); }
 function syncGutter() {
   const t = activeTab();
   if (!t || t.kind !== 'text') return;
+  if (wrapOn()) { syncWrapGutter(); syncGutterScroll(); return; }
+  ED.geom = null;
+  ED.wrap.classList.remove('nogutter');
+  lastGutterKey = '';
   const n = ED.ta.value.split('\n').length;
   if (n !== lastGutterCount) {
     lastGutterCount = n;
@@ -336,6 +353,51 @@ function syncGutter() {
   syncGutterScroll();
 }
 function syncGutterScroll() { ED.gutter.scrollTop = ED.ta.scrollTop; }
+
+// Soft wrap: each logical line may take several visual rows. A hidden mirror with the same
+// width and font measures every line so that line numbers stay in front of their line.
+const WRAP_GUTTER_MAX = 5000;
+let gutterFrame = 0;
+function scheduleGutter() {
+  if (gutterFrame) return;
+  gutterFrame = requestAnimationFrame(() => { gutterFrame = 0; syncGutter(); });
+}
+function syncWrapGutter() {
+  const v = ED.ta.value;
+  const width = ED.ta.clientWidth;
+  if (!width || ED.wrap.hidden) return;
+  const key = width + '|' + getComputedStyle(ED.ta).fontSize + '|' + ED.ta.style.tabSize + '|' + v;
+  if (key === lastGutterKey) return;
+  lastGutterKey = key;
+  lastGutterCount = -1;
+  const lines = v.split('\n');
+  if (lines.length > WRAP_GUTTER_MAX) {
+    ED.geom = null;
+    ED.wrap.classList.add('nogutter');
+    return;
+  }
+  ED.wrap.classList.remove('nogutter');
+  const m = ED.measure;
+  m.style.width = width + 'px';
+  m.style.tabSize = ED.ta.style.tabSize;
+  m.innerHTML = lines.map((l) => '<div>' + (esc(l) || ' ') + '</div>').join('');
+  const base = m.getBoundingClientRect().top;
+  const tops = new Array(lines.length);
+  const heights = new Array(lines.length);
+  const kids = m.children;
+  for (let i = 0; i < kids.length; i++) {
+    const r = kids[i].getBoundingClientRect();
+    tops[i] = r.top - base;
+    heights[i] = r.height;
+  }
+  m.innerHTML = '';
+  ED.geom = { tops, heights };
+  let s = '';
+  for (let i = 0; i < lines.length; i++) s += `<div style="height:${heights[i]}px">${i + 1}</div>`;
+  ED.gutter.innerHTML = s;
+  ED.gutter.style.width = Math.max(48, String(lines.length).length * 9 + 28) + 'px';
+  scheduleHL();
+}
 
 // ---------------------------------------------------------------- syntax highlighting overlay
 const HLS = { lines: null, text: null, lang: null, frame: 0 };
@@ -355,7 +417,7 @@ function renderHL() {
   if (!lang || v.length > 2000000) { hlOff(); return; }
   if (HLS.text !== v) { HLS.text = v; HLS.lines = v.split('\n'); }
   const lines = HLS.lines;
-  const wrap = setting('wrap', false);
+  const wrap = setting('wrap', true);
   if (wrap && lines.length > 4000) { hlOff(); return; }
   const ta = ED.ta;
   const lh = parseFloat(getComputedStyle(ta).lineHeight) || 21;
@@ -377,6 +439,11 @@ function renderHL() {
     const ln = v.slice(0, ta.selectionStart).split('\n').length;
     ED.hlLine.style.top = (8 + (ln - 1) * lh - ta.scrollTop) + 'px';
     ED.hlLine.style.height = lh + 'px';
+    ED.hlLine.hidden = ta.selectionStart !== ta.selectionEnd;
+  } else if (ED.geom) {
+    const ln = v.slice(0, ta.selectionStart).split('\n').length;
+    ED.hlLine.style.top = (8 + (ED.geom.tops[ln - 1] || 0) - ta.scrollTop) + 'px';
+    ED.hlLine.style.height = (ED.geom.heights[ln - 1] || lh) + 'px';
     ED.hlLine.hidden = ta.selectionStart !== ta.selectionEnd;
   } else ED.hlLine.hidden = true;
 }
@@ -419,6 +486,7 @@ function renderEditor() {
   const t = activeTab();
   ED.welcome.hidden = ED.split.hidden = ED.other.hidden = true;
   ED.banner.hidden = true;
+  ED.mdbar.hidden = true;
   if (!t) {
     ED.welcome.hidden = false;
     renderWelcome();
@@ -433,12 +501,13 @@ function renderEditor() {
     const mode = md ? t.mode || 'edit' : 'edit';
     ED.wrap.hidden = mode === 'preview';
     ED.preview.hidden = mode === 'edit';
+    ED.mdbar.hidden = !md || mode === 'preview';
     if (ED.ta.value !== t.content || ED.cur !== t) {
       ED.ta.value = t.content;
       lastGutterCount = -1;
     }
     ED.cur = t;
-    const wrap = setting('wrap', false);
+    const wrap = setting('wrap', true);
     ED.ta.classList.toggle('wrap', wrap);
     ED.wrap.classList.toggle('wrap', wrap);
     ED.ta.setAttribute('wrap', wrap ? 'soft' : 'off');
@@ -606,7 +675,7 @@ function onEditorInput() {
   t.content = ED.ta.value;
   if (t.preview) { t.preview = false; renderTabs(); }
   else if (wasDirty !== isDirty(t)) renderTabs();
-  syncGutter();
+  if (wrapOn()) scheduleGutter(); else syncGutter();
   scheduleHL();
   schedulePreview();
   refreshSectionsSoon();
@@ -708,7 +777,21 @@ function onEditorKey(e) {
     moveLines(e.key === 'ArrowUp' ? -1 : 1);
     return;
   }
-  if (mod && e.key === 'd' && !e.shiftKey) { // duplicate line
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  // Ctrl+X / Ctrl+C without a selection cut / copy the whole line (as in VS Code)
+  if (mod && !e.shiftKey && !e.altKey && (key === 'x' || key === 'c') && ta.selectionStart === ta.selectionEnd) {
+    e.preventDefault();
+    copyLines(key === 'x');
+    return;
+  }
+  // Ctrl+Shift+D copies the current line(s), even with a partial selection
+  if (mod && e.shiftKey && !e.altKey && key === 'd') {
+    e.preventDefault();
+    const n = copyLines(false);
+    toast(n > 1 ? `${n} lignes copiées` : 'Ligne copiée', 'ok', 1200);
+    return;
+  }
+  if (mod && key === 'd' && !e.shiftKey) { // duplicate line
     e.preventDefault();
     const [ls, le] = lineBounds(v, ta.selectionStart);
     const line = v.slice(ls, le);
@@ -722,6 +805,62 @@ function onEditorKey(e) {
     e.preventDefault();
     toggleComment();
   }
+}
+
+// ---------------------------------------------------------------- line clipboard
+// Text put on the clipboard by copyLines(); the copy event handler hands it to the browser,
+// which keeps the native clipboard working without asking for a permission.
+ED.pendingClip = null;
+ED.lineClip = null; // last whole-line copy: pasting it inserts a line above the cursor
+function selectedLineRange(v, s, en) {
+  const [ls] = lineBounds(v, s);
+  const [, le] = lineBounds(v, en > s && v[en - 1] === '\n' ? en - 1 : en);
+  return [ls, le];
+}
+function copyLines(cut) {
+  const ta = ED.ta;
+  const v = ta.value;
+  const s = ta.selectionStart, en = ta.selectionEnd;
+  const [ls, le] = selectedLineRange(v, s, en);
+  const text = v.slice(ls, le) + '\n';
+  ED.pendingClip = text;
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch { ok = false; }
+  if (!ok || ED.pendingClip !== null) {
+    ED.pendingClip = null;
+    if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => toast('Copie impossible', 'err'));
+  }
+  ED.lineClip = text;
+  if (cut) {
+    let a = ls, b = le;
+    if (le < v.length) b = le + 1; // take the line break with the line
+    else if (ls > 0) a = ls - 1; // last line: remove the preceding line break instead
+    ta.setSelectionRange(a, b);
+    if (!document.execCommand('delete')) { ta.setRangeText('', a, b, 'start'); onEditorInput(); }
+    const nv = ta.value;
+    const p = lineBounds(nv, Math.min(a === ls ? ls : a, nv.length))[0];
+    ta.setSelectionRange(p, p);
+  }
+  return text.split('\n').length - 1;
+}
+function onClipboardEvent(e) {
+  if (ED.pendingClip === null) return;
+  e.preventDefault();
+  e.clipboardData.setData('text/plain', ED.pendingClip);
+  ED.pendingClip = null;
+}
+function onPasteLine(e) {
+  const ta = ED.ta;
+  const text = e.clipboardData && e.clipboardData.getData('text/plain');
+  if (!ED.lineClip || ta.selectionStart !== ta.selectionEnd || text.replace(/\r\n/g, '\n') !== ED.lineClip) return;
+  // a whole line copied with Ctrl+C/X/Shift+D goes above the current line
+  e.preventDefault();
+  const pos = ta.selectionStart;
+  const [ls] = lineBounds(ta.value, pos);
+  ta.setSelectionRange(ls, ls);
+  insertText(ED.lineClip);
+  const p = pos + ED.lineClip.length;
+  ta.setSelectionRange(p, p);
 }
 
 function moveLines(dir) {
@@ -801,6 +940,211 @@ function toggleCurrentLineTask() {
   ta.setSelectionRange(pos + delta, pos + delta);
 }
 
+// ---------------------------------------------------------------- markdown toolbar
+// Every action goes through insertText(), so Ctrl+Z undoes it like typing.
+const MD_ICONS = {
+  bold: '<path d="M4.5 2.5h4.2a2.8 2.8 0 0 1 0 5.6H4.5zM4.5 8.1h5a2.7 2.7 0 0 1 0 5.4h-5z"/>',
+  italic: '<path d="M7 2.5h5M4 13.5h5M9.5 2.5l-3 11"/>',
+  strike: '<path d="M2.5 8h11M11 4.2C10.4 3.1 9.3 2.5 8 2.5c-1.9 0-3.2 1-3.2 2.4 0 .8.4 1.5 1.2 2M5 11.6c.6 1.2 1.7 1.9 3.2 1.9 2 0 3.3-1 3.3-2.5 0-.5-.1-1-.4-1.4"/>',
+  code: '<path d="m5.5 4-4 4 4 4M10.5 4l4 4-4 4"/>',
+  ul: '<circle cx="2.8" cy="4" r=".9"/><circle cx="2.8" cy="8" r=".9"/><circle cx="2.8" cy="12" r=".9"/><path d="M6 4h8M6 8h8M6 12h8"/>',
+  ol: '<path d="M6 4h8M6 8h8M6 12h8M2 2.8h1v3M1.8 9.2c.3-.5 1.7-.6 1.7.3 0 .6-1.7 1.4-1.7 2h1.8"/>',
+  task: '<rect x="1.5" y="2.5" width="5" height="5" rx=".8"/><path d="m2.7 5 1 1 1.7-2M9 5h5.5M1.5 9.5h5v4h-5zM9 11.5h5.5"/>',
+  quote: '<path d="M3 3.5v9M6 5h7.5M6 8h7.5M6 11h5"/>',
+  link: '<path d="m6.5 9.5 3-3M7 4.5l1-1a2.5 2.5 0 0 1 3.5 3.5l-1 1M9 11.5l-1 1A2.5 2.5 0 0 1 4.5 9l1-1"/>',
+  image: '<rect x="1.5" y="2.5" width="13" height="11" rx="1.2"/><circle cx="5.5" cy="6" r="1.2"/><path d="m1.5 12 4-4 3 3 2-2 4 4"/>',
+  codeblock: '<rect x="1.5" y="2.5" width="13" height="11" rx="1.2"/><path d="m6 6-2 2 2 2M10 6l2 2-2 2"/>',
+  table: '<rect x="1.5" y="2.5" width="13" height="11" rx="1.2"/><path d="M1.5 6.2h13M1.5 9.8h13M6 2.5v11M10.5 2.5v11"/>',
+  hr: '<path d="M1.5 8h13M4 4.5h8M4 11.5h8" opacity=".9"/>',
+  note: '<path d="M2.5 2.5h11v8h-6l-3 3v-3h-2z"/><path d="M8 4.8v2.6M8 9v.1"/>',
+};
+function mdIcon(n) { return `<svg class="ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">${MD_ICONS[n]}</svg>`; }
+
+function buildMdToolbar() {
+  const bar = h('div', { class: 'md-bar', hidden: true, role: 'toolbar', 'aria-label': 'Insérer du Markdown' });
+  const btn = (html, title, fn, cls = '') => h('button', {
+    class: 'md-btn ' + cls, title, html,
+    onmousedown: (e) => e.preventDefault(), // keep the editor focus and selection
+    onclick: (e) => { const t = activeTab(); if (!t || t.kind !== 'text') return; ED.ta.focus(); fn(e, t); },
+  });
+  const sep = () => h('span', { class: 'md-sep' });
+  const menuAt = (e, items) => { const r = e.currentTarget.getBoundingClientRect(); ctxMenu(r.left, r.bottom + 2, items); };
+  bar.append(
+    btn('Titre <span class="caret">▾</span>', 'Titre (H1 à H6)', (e) => menuAt(e, [
+      ...[1, 2, 3, 4, 5, 6].map((n) => ({ label: 'Titre ' + n + '  ' + '#'.repeat(n), action: () => { ED.ta.focus(); mdHeading(n); } })),
+      '-', { label: 'Texte normal', action: () => { ED.ta.focus(); mdHeading(0); } },
+    ]), 'md-text'),
+    sep(),
+    btn(mdIcon('bold'), 'Gras  **texte**', () => mdInline('**', '**', 'texte en gras')),
+    btn(mdIcon('italic'), 'Italique  *texte*', () => mdInline('*', '*', 'texte en italique')),
+    btn(mdIcon('strike'), 'Barré  ~~texte~~', () => mdInline('~~', '~~', 'texte barré')),
+    btn(mdIcon('code'), 'Code en ligne  `code`', () => mdInline('`', '`', 'code')),
+    sep(),
+    btn(mdIcon('ul'), 'Liste à puces', () => mdLinePrefix('ul')),
+    btn(mdIcon('ol'), 'Liste numérotée', () => mdLinePrefix('ol')),
+    btn(mdIcon('task'), 'Liste de tâches  - [ ]', () => mdLinePrefix('task')),
+    btn(mdIcon('quote'), 'Citation  >', () => mdLinePrefix('quote')),
+    sep(),
+    btn(mdIcon('link'), 'Lien  [texte](url)', () => mdLink(false)),
+    btn(mdIcon('image'), 'Image  ![texte](chemin)', () => mdLink(true)),
+    btn(mdIcon('codeblock'), 'Bloc de code  ```', () => mdCodeBlock()),
+    btn(mdIcon('table'), 'Tableau', () => mdBlock('| Colonne 1 | Colonne 2 | Colonne 3 |\n| --- | --- | --- |\n|  |  |  |', 2, 9)),
+    btn(mdIcon('hr'), 'Ligne horizontale  ---', () => mdBlock('---')),
+    btn(mdIcon('note') + '<span class="caret">▾</span>', 'Encadré  > [!NOTE]', (e) => menuAt(e, [
+      ['NOTE', 'Note'], ['TIP', 'Astuce'], ['IMPORTANT', 'Important'], ['WARNING', 'Attention'], ['CAUTION', 'Danger'],
+    ].map(([k, l]) => ({ label: l + '  [!' + k + ']', action: () => { ED.ta.focus(); mdCallout(k); } })))));
+  return bar;
+}
+
+function selLinesInfo() {
+  const ta = ED.ta;
+  const v = ta.value;
+  const s = ta.selectionStart, en = ta.selectionEnd;
+  const [ls, le] = selectedLineRange(v, s, en);
+  return { v, s, en, ls, le, lines: v.slice(ls, le).split('\n') };
+}
+function replaceLines(ls, le, out, s, en, firstDelta, totalDelta) {
+  const ta = ED.ta;
+  ta.setSelectionRange(ls, le);
+  insertText(out);
+  if (s === en) { const p = Math.max(ls, s + firstDelta); ta.setSelectionRange(p, p); }
+  else ta.setSelectionRange(Math.max(ls, s + firstDelta), Math.max(ls, en + totalDelta));
+}
+
+function mdInline(before, after, placeholder) {
+  const ta = ED.ta;
+  const v = ta.value;
+  let s = ta.selectionStart, en = ta.selectionEnd;
+  // already wrapped: remove the markers
+  if (v.slice(s - before.length, s) === before && v.slice(en, en + after.length) === after && (before !== '*' || v[s - 2] !== '*' || v[en + 1] === '*')) {
+    ta.setSelectionRange(s - before.length, en + after.length);
+    insertText(v.slice(s, en));
+    ta.setSelectionRange(s - before.length, en - before.length);
+    return;
+  }
+  const sel = v.slice(s, en);
+  if (sel.length > 2 && sel.startsWith(before) && sel.endsWith(after)) {
+    const inner = sel.slice(before.length, sel.length - after.length);
+    insertText(inner);
+    ta.setSelectionRange(s, s + inner.length);
+    return;
+  }
+  // keep surrounding spaces outside the markers
+  const lead = sel.match(/^\s*/)[0], trail = sel.slice(lead.length).match(/\s*$/)[0];
+  const core = sel.slice(lead.length, sel.length - trail.length) || placeholder;
+  insertText(lead + before + core + after + trail);
+  const a = s + lead.length + before.length;
+  ta.setSelectionRange(a, a + core.length);
+}
+
+const LIST_MARK = /^(\s*)(?:[-*+]\s+\[[ xX]\]\s+|[-*+]\s+|\d+[.)]\s+|>\s?)/;
+function mdLinePrefix(kind) {
+  const { s, en, ls, le, lines } = selLinesInfo();
+  const test = { ul: /^\s*[-*+]\s+(?!\[[ xX]\])/, ol: /^\s*\d+[.)]\s+/, task: /^\s*[-*+]\s+\[[ xX]\]\s+/, quote: /^\s*>/ }[kind];
+  const filled = lines.filter((l) => l.trim());
+  const all = filled.length > 0 && filled.every((l) => test.test(l));
+  let n = 0, firstDelta = 0, total = 0;
+  const out = lines.map((l, i) => {
+    if (!l.trim() && lines.length > 1) return l;
+    let nl;
+    if (all) nl = l.replace(LIST_MARK, '$1');
+    else {
+      const m = l.match(LIST_MARK);
+      const ind = m ? m[1] : l.match(/^\s*/)[0];
+      const body = m ? l.slice(m[0].length) : l.slice(ind.length);
+      n++;
+      const mark = kind === 'ul' ? '- ' : kind === 'ol' ? n + '. ' : kind === 'task' ? '- [ ] ' : '> ';
+      nl = ind + mark + body;
+    }
+    if (i === 0) firstDelta = nl.length - l.length;
+    total += nl.length - l.length;
+    return nl;
+  }).join('\n');
+  replaceLines(ls, le, out, s, en, firstDelta, total);
+}
+
+function mdHeading(level) {
+  const { s, en, ls, le, lines } = selLinesInfo();
+  let firstDelta = 0, total = 0;
+  const out = lines.map((l, i) => {
+    if (!l.trim() && lines.length > 1) return l;
+    const body = l.replace(/^\s*#{1,6}(\s+|$)/, '');
+    const nl = level ? '#'.repeat(level) + ' ' + body : body;
+    if (i === 0) firstDelta = nl.length - l.length;
+    total += nl.length - l.length;
+    return nl;
+  }).join('\n');
+  replaceLines(ls, le, out, s, en, firstDelta, total);
+}
+
+function mdLink(image) {
+  const ta = ED.ta;
+  const v = ta.value;
+  const s = ta.selectionStart, en = ta.selectionEnd;
+  const sel = v.slice(s, en);
+  const isUrl = /^(https?:\/\/|\.{0,2}\/|[\w-]+\.(png|jpe?g|gif|svg|webp|md)$)\S*$/i.test(sel.trim());
+  const label = isUrl ? (image ? 'image' : 'texte') : sel || (image ? 'description' : 'texte du lien');
+  const url = isUrl ? sel.trim() : image ? 'chemin/image.png' : 'https://';
+  const text = (image ? '!' : '') + '[' + label + '](' + url + ')';
+  insertText(text);
+  // select what is left to type: the URL, or the label when the URL was selected
+  const lStart = s + (image ? 2 : 1);
+  if (isUrl) ta.setSelectionRange(lStart, lStart + label.length);
+  else { const uStart = lStart + label.length + 2; ta.setSelectionRange(uStart, uStart + url.length); }
+}
+
+// insert a block (text without final line break) on its own lines, separated by blank lines
+function mdBlock(text, selFrom, selLen) {
+  const ta = ED.ta;
+  const v = ta.value;
+  const [ls] = lineBounds(v, ta.selectionStart);
+  const [, le] = lineBounds(v, ta.selectionEnd);
+  let a, b, pre = '';
+  if (!v.slice(ls, le).trim()) { // empty line: use it
+    a = ls; b = le;
+    if (ls > 0 && v.slice(lineBounds(v, ls - 1)[0], ls - 1).trim()) pre = '\n';
+  } else { a = b = le; pre = '\n\n'; }
+  let post = '';
+  if (b >= v.length) post = '\n';
+  else { const [ns, ne] = lineBounds(v, b + 1); if (v.slice(ns, ne).trim()) post = '\n'; }
+  ta.setSelectionRange(a, b);
+  insertText(pre + text + post);
+  const start = a + pre.length;
+  if (selFrom != null) ta.setSelectionRange(start + selFrom, start + selFrom + (selLen || 0));
+  else { const p = Math.min(ta.value.length, start + text.length + 1); ta.setSelectionRange(p, p); }
+}
+
+function mdCodeBlock() {
+  const ta = ED.ta;
+  const v = ta.value;
+  const s = ta.selectionStart, en = ta.selectionEnd;
+  if (s !== en) {
+    const { ls, le } = selLinesInfo();
+    const block = v.slice(ls, le);
+    ta.setSelectionRange(ls, le);
+    insertText('```\n' + block + '\n```');
+    ta.setSelectionRange(ls + 3, ls + 3); // cursor where the language goes
+    return;
+  }
+  mdBlock('```\n\n```', 4, 0);
+}
+
+function mdCallout(kind) {
+  const ta = ED.ta;
+  const v = ta.value;
+  const s = ta.selectionStart, en = ta.selectionEnd;
+  if (s !== en) {
+    const { ls, le, lines } = selLinesInfo();
+    const out = '> [!' + kind + ']\n' + lines.map((l) => '> ' + l).join('\n');
+    ta.setSelectionRange(ls, le);
+    insertText(out);
+    ta.setSelectionRange(ls + out.length, ls + out.length);
+    return;
+  }
+  const head = '> [!' + kind + ']\n> ';
+  mdBlock(head, head.length, 0);
+}
+
 function revealLine(t, line, col, len) {
   if (t.kind !== 'text') return;
   if (t.mode === 'preview') setMdMode(t, 'split');
@@ -812,7 +1156,9 @@ function revealLine(t, line, col, len) {
   ED.ta.focus();
   ED.ta.setSelectionRange(start, start + (len || 0));
   const lh = parseFloat(getComputedStyle(ED.ta).lineHeight) || 21;
-  ED.ta.scrollTop = Math.max(0, (line - 1) * lh - ED.ta.clientHeight / 3);
+  syncGutter();
+  const y = ED.geom && wrapOn() ? ED.geom.tops[line - 1] || 0 : (line - 1) * lh;
+  ED.ta.scrollTop = Math.max(0, y - ED.ta.clientHeight / 3);
   syncGutterScroll();
   renderCursor();
 }

@@ -113,15 +113,19 @@ function renderConflicts() {
   const { regions } = conflictsOf(t);
   const op = W() && W().git && W().git.op;
   renderConflictBar(t, regions, op);
-  if (!regions.length || ED.wrap.hidden || setting('wrap', false)) return;
+  const wrapped = setting('wrap', true);
+  if (!regions.length || ED.wrap.hidden || (wrapped && !ED.geom)) return;
   const ta = ED.ta;
   const lh = parseFloat(getComputedStyle(ta).lineHeight) || 21;
-  const top = (line) => 8 + line * lh - ta.scrollTop;
+  // with soft wrap, a line can take several rows: use the measured positions
+  const G = wrapped ? ED.geom : null;
+  const y = (line) => (G ? (line < G.tops.length ? G.tops[line] : G.tops[G.tops.length - 1] + G.heights[G.heights.length - 1]) : line * lh);
+  const top = (line) => 8 + y(line) - ta.scrollTop;
   const vis = (a, b) => top(b) > -lh && top(a) < ta.clientHeight + lh;
   regions.forEach((r, k) => {
     if (!vis(r.start, r.end + 1)) return;
     const mid = r.base >= 0 ? r.base : r.sep;
-    const band = (cls, a, b) => bg.appendChild(h('div', { class: 'cfx-band ' + cls, style: { top: top(a) + 'px', height: (b - a) * lh + 'px' } }));
+    const band = (cls, a, b) => bg.appendChild(h('div', { class: 'cfx-band ' + cls, style: { top: top(a) + 'px', height: (y(b) - y(a)) + 'px' } }));
     band('cfx-cur-h', r.start, r.start + 1);
     band('cfx-cur', r.start + 1, mid);
     if (r.base >= 0) band('cfx-base', r.base, r.sep);
@@ -156,7 +160,7 @@ function renderConflictBar(t, regions, op) {
       h('button', { class: 'btn secondary', text: 'Entrante', title: 'Garder la version entrante dans tous les conflits de ce fichier', onclick: () => resolveRegions(t, 'incoming') }),
       h('button', { class: 'btn secondary', text: 'Les deux', onclick: () => resolveRegions(t, 'both') }));
     if (op === 'rebase') bar.appendChild(h('div', { class: 'cfx-hint', text: 'Rebase : « actuelle » est la branche sur laquelle vous rejouez vos commits (souvent la distante), « entrante » est votre commit.' }));
-    if (setting('wrap', false)) bar.appendChild(h('div', { class: 'cfx-hint', text: 'Désactivez le retour à la ligne (Alt+Z) pour afficher les boutons sur chaque conflit.' }));
+    if (setting('wrap', true) && !ED.geom) bar.appendChild(h('div', { class: 'cfx-hint', text: 'Fichier très long : désactivez le retour à la ligne (Alt+Z) pour afficher les boutons sur chaque conflit.' }));
   } else {
     bar.append(
       h('span', { class: 'cfx-title ok', html: icon('check') + '<b>Plus de marqueurs de conflit dans ce fichier.</b>' }),

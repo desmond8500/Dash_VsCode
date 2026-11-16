@@ -3,6 +3,24 @@
 Chaque version publiée correspond à un tag `vX.Y.Z`. La section de ce fichier qui porte ce numéro
 sert de notes de version : elle s'affiche dans Dash Lite (fenêtre *Mises à jour → Nouveautés*).
 
+## [1.3.0] - 2026-11-16
+
+### Ajouté
+- **Barre d'outils Markdown** au-dessus de l'éditeur (modes Éditer et Partagé) : titres H1 à H6, gras, italique, barré,
+  code, listes à puces / numérotées / de tâches, citation, lien, image, bloc de code, tableau, ligne horizontale et
+  encadrés `> [!NOTE]`. Les boutons de mise en forme retirent le format s'il est déjà appliqué ; `Ctrl+Z` annule chaque action.
+- `Ctrl+X` sans sélection **coupe la ligne** entière, `Ctrl+C` sans sélection la copie (comme dans VS Code) ;
+  une ligne ainsi copiée se colle au-dessus de la ligne courante.
+- `Ctrl+Maj+D` **copie la ligne** courante (ou les lignes sélectionnées) dans le presse-papiers.
+
+### Modifié
+- Le **retour à la ligne automatique** est activé par défaut (`Alt+Z` pour le désactiver) et garde désormais les
+  numéros de ligne, alignés sur chaque ligne même quand elle occupe plusieurs rangées, ainsi que le surlignage de la
+  ligne courante et les boutons de résolution des conflits.
+
+### Corrigé
+- Les numéros de ligne ne débordent plus sur le terminal quand la zone d'édition est petite.
+
 ## [1.2.0] - 2026-11-15
 
 ### Ajouté
