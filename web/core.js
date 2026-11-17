@@ -108,6 +108,7 @@ const ICONS = {
   pull: '<path d="M8 1.5v9M4.5 7 8 10.5 11.5 7M3 14h10"/>',
   push: '<path d="M8 14V5M4.5 8.5 8 5l3.5 3.5M3 2h10"/>',
   check: '<path d="m3 8.5 3 3 7-7"/>',
+  server: '<rect x="2" y="2.5" width="12" height="4.5" rx="1"/><rect x="2" y="9" width="12" height="4.5" rx="1"/><path d="M4.5 4.75h.1M4.5 11.25h.1M8 4.75h3.5M8 11.25h3.5"/>',
   terminal: '<path d="m2.5 4 4 4-4 4M8 12.5h5.5"/>',
   clear: '<circle cx="8" cy="8" r="5.5"/><path d="m4.1 11.9 7.8-7.8"/>',
   split: '<rect x="1.5" y="2.5" width="13" height="11" rx="1.2"/><path d="M8 2.5v11"/>',

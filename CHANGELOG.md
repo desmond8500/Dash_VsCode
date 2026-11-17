@@ -3,6 +3,19 @@
 Chaque version publiée correspond à un tag `vX.Y.Z`. La section de ce fichier qui porte ce numéro
 sert de notes de version : elle s'affiche dans Dash Lite (fenêtre *Mises à jour → Nouveautés*).
 
+## [1.4.0] - 2026-11-17
+
+### Ajouté
+- **Connexions SSH** : vue SSH (`Ctrl+Maj+H` pour se connecter) avec des connexions enregistrées (hôte, port,
+  utilisateur, clé privée, dossier distant, rebond, options) et les hôtes de `~/.ssh/config`. La connexion s'ouvre
+  dans une session du terminal, avec invite, couleurs, `sudo` et `Ctrl+C` qui interrompt la commande distante.
+- Mot de passe, phrase de passe et confirmation de l'empreinte d'un nouveau serveur demandés dans une boîte de
+  dialogue et transmis à ssh ; ils ne sont jamais enregistrés.
+- Le champ du terminal masque la saisie quand un programme demande un mot de passe (`sudo`, ssh…).
+
+### Modifié
+- `Ctrl+Maj+D` copie la ligne (ou les lignes sélectionnées) **en dessous**, en plus de la mettre dans le presse-papiers.
+
 ## [1.3.0] - 2026-11-16
 
 ### Ajouté

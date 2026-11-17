@@ -22,6 +22,10 @@ import (
 const appName = "DashLite"
 
 func main() {
+	// started by ssh as SSH_ASKPASS: forward the question to the running instance
+	if u := os.Getenv("DASHLITE_ASKPASS_URL"); u != "" {
+		os.Exit(runAskpass(u))
+	}
 	port := flag.Int("port", 4777, "port HTTP préféré (un autre est choisi s'il est occupé)")
 	noBrowser := flag.Bool("no-browser", false, "ne pas ouvrir de fenêtre ; le serveur reste actif jusqu'à Ctrl+C")
 	dataFlag := flag.String("data", "", "dossier de configuration (par défaut : dossier utilisateur, ou DashLite-data à côté de l'exécutable)")
@@ -81,6 +85,7 @@ func main() {
 	app.registerShortcut()
 	app.registerCommitSuggest()
 	app.registerConflicts()
+	app.registerSSH()
 	app.updater = &Updater{app: app}
 	app.registerUpdate()
 

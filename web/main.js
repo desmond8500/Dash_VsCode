@@ -297,7 +297,7 @@ function shortcutsDialog() {
     ['Enregistrer / tout enregistrer', 'Ctrl+S / Ctrl+Maj+S'], ['Cocher une tâche (Markdown)', 'Ctrl+Entrée'], ['Aperçu Markdown', 'Ctrl+Maj+V'],
     ['Terminal', 'Ctrl+`  (ou Ctrl+J)'], ['Aller à une section', 'Ctrl+Maj+O'], ['Barre latérale', 'Ctrl+B'], ['Explorateur / Recherche / Git / Tâches', 'Ctrl+Maj+E / F / G / X'],
     ['Fermer l’onglet / Nouveau fichier', 'Alt+W / Alt+N'], ['Aller à l’onglet n', 'Alt+1…9'], ['Aller à la ligne', 'Ctrl+G'], ['Retour à la ligne', 'Alt+Z'],
-    ['Déplacer la ligne', 'Alt+↑ / Alt+↓'], ['Dupliquer la ligne', 'Ctrl+D'], ['Couper / copier la ligne (sans sélection)', 'Ctrl+X / Ctrl+C'], ['Copier la ligne', 'Ctrl+Maj+D'], ['Commenter', 'Ctrl+/'], ['Rechercher dans le fichier', 'Ctrl+F (navigateur)'],
+    ['Déplacer la ligne', 'Alt+↑ / Alt+↓'], ['Dupliquer la ligne', 'Ctrl+D'], ['Couper / copier la ligne (sans sélection)', 'Ctrl+X / Ctrl+C'], ['Copier la ligne en dessous', 'Ctrl+Maj+D'], ['Commenter', 'Ctrl+/'], ['Rechercher dans le fichier', 'Ctrl+F (navigateur)'],
     ['Terminal : arrêter / effacer / compléter', 'Ctrl+C / Ctrl+L / Tab'],
   ];
   modal({ title: 'Raccourcis clavier', body: '<table class="kbd-table">' + rows.map(([a, b]) => `<tr><td>${esc(a)}</td><td><kbd>${esc(b.replace(/Ctrl/g, MOD))}</kbd></td></tr>`).join('') + '</table>', buttons: [{ label: 'Fermer', primary: true, value: true }] });
@@ -365,6 +365,9 @@ function registerCommands() {
   cmd('view.git', 'Affichage : git', () => showView('git'), 'Ctrl+Maj+G');
   cmd('view.tasks', 'Affichage : tâches', () => showView('tasks'), 'Ctrl+Maj+X');
   cmd('view.commands', 'Affichage : commandes', () => showView('commands'));
+  cmd('view.ssh', 'Affichage : SSH', () => showView('ssh'));
+  cmd('ssh.connect', 'SSH : se connecter…', () => window.SSHView.sshPicker(), 'Ctrl+Maj+H');
+  cmd('ssh.new', 'SSH : nouvelle connexion', () => window.SSHView.newSsh());
   cmd('view.projects', 'Affichage : projets', () => showView('projects'));
   cmd('view.sidebar', 'Affichage : afficher/masquer la barre latérale', () => document.body.classList.toggle('no-side'), 'Ctrl+B');
   cmd('panel.toggle', 'Terminal : afficher/masquer', () => showPanel(), 'Ctrl+`');
@@ -435,6 +438,7 @@ function setupKeys() {
     else if (mod && e.shiftKey && k === 'g') showView('git');
     else if (mod && e.shiftKey && k === 'x') showView('tasks');
     else if (mod && e.shiftKey && k === 'b') commandRunner();
+    else if (mod && e.shiftKey && k === 'h') window.SSHView.sshPicker();
     else if (mod && e.shiftKey && k === 'o') sectionPicker();
     else if (mod && !e.shiftKey && k === 'b') document.body.classList.toggle('no-side');
     else if (mod && (e.key === '`' || e.code === 'Backquote' || k === 'j')) showPanel();

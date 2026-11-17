@@ -80,7 +80,7 @@ sur votre machine (npm, php, composer, python, flutter…).
 - Éditeur avec **coloration syntaxique** (JavaScript/TypeScript, JSON, PHP/Blade, Python, Go, Rust, Java, Kotlin, C#, C/C++,
   Dart, Swift, HTML/XML/Vue, CSS/SCSS, Markdown, YAML, TOML/INI/.env, Shell, PowerShell, Batch, SQL, Dockerfile, Makefile),
   ligne courante surlignée, numéros de ligne, indentation détectée, `Tab`/`Maj+Tab`, `Alt+↑/↓` déplacer la ligne, `Ctrl+D` dupliquer,
-  `Ctrl+X` / `Ctrl+C` sans sélection pour couper / copier la ligne, `Ctrl+Maj+D` copier la ligne, `Ctrl+/` commenter,
+  `Ctrl+X` / `Ctrl+C` sans sélection pour couper / copier la ligne, `Ctrl+Maj+D` copier la ligne en dessous, `Ctrl+/` commenter,
   `Ctrl+G` aller à la ligne, conserve CRLF/BOM/Latin-1.
 - **Retour à la ligne automatique** (activé par défaut, `Alt+Z` pour basculer) : les lignes longues passent à la ligne au
   bord de la fenêtre, les numéros de ligne restent alignés.
@@ -121,6 +121,22 @@ sur votre machine (npm, php, composer, python, flutter…).
 - Chaque commande tourne dans sa propre session (liste à droite du terminal) : relancer ⟳, arrêter ■, fermer.
   Les processus continuent si vous rechargez la page.
 
+### SSH
+- Vue **SSH** (barre d'activité, ou `Ctrl+Maj+H` pour se connecter directement) : enregistrez vos serveurs avec un nom,
+  l'hôte, le port, l'utilisateur, une clé privée, le dossier distant à ouvrir et, en options avancées, un rebond
+  (ProxyJump) ou des options ssh. Coller `utilisateur@hôte:port` dans le champ Hôte remplit les trois champs.
+- Les hôtes de `~/.ssh/config` sont listés aussi : un clic pour s'y connecter, l'étoile pour les enregistrer.
+- Un clic ouvre la connexion dans une session du terminal (relancer ⟳ = se reconnecter). L'invite, les couleurs et
+  `sudo` fonctionnent ; `Ctrl+C` interrompt la commande distante, `exit` ferme la connexion.
+- **Mots de passe** : jamais enregistrés. Quand ssh en a besoin (mot de passe, phrase de passe d'une clé, première
+  connexion à un serveur à confirmer), Dash affiche une boîte de dialogue et transmet la réponse à ssh uniquement.
+  Avec une clé SSH (ou un agent), la connexion est directe. Les connexions sont enregistrées dans la configuration
+  de Dash et partagées entre les projets.
+- Pré-requis : le client **OpenSSH** (`ssh`), présent d'office sous Windows 10/11 et la plupart des Linux.
+  La saisie des mots de passe par Dash demande OpenSSH 8.4 ou plus récent sous Windows ; sinon utilisez une clé.
+- Le terminal de Dash n'est pas un émulateur complet : les programmes plein écran (`vim`, `top`, `htop`…) ne s'y
+  affichent pas correctement.
+
 ### Git
 - Branche, ↓ en retard / ↑ en avance, fichiers modifiés (indexer, retirer, annuler, voir le diff), historique des commits.
 - **Message de commit généré** : le bouton ✨ du champ de message (ou *Commit* avec un message vide) rédige un message
@@ -160,10 +176,11 @@ jamais de mot de passe : si une opération échoue pour cette raison, configurez
 | Palette de commandes | `Ctrl+Maj+P` / `F1` |
 | Changer de projet | `Ctrl+R` |
 | Lancer une commande | `Ctrl+Maj+B` |
+| Se connecter en SSH | `Ctrl+Maj+H` |
 | Enregistrer / tout enregistrer | `Ctrl+S` / `Ctrl+Maj+S` |
 | Cocher une tâche | `Ctrl+Entrée` |
 | Couper / copier la ligne (sans sélection) | `Ctrl+X` / `Ctrl+C` |
-| Copier la ligne | `Ctrl+Maj+D` |
+| Copier la ligne en dessous (aussi dans le presse-papiers) | `Ctrl+Maj+D` |
 | Dupliquer la ligne | `Ctrl+D` |
 | Retour à la ligne automatique | `Alt+Z` |
 | Aperçu Markdown | `Ctrl+Maj+V` |
@@ -212,8 +229,10 @@ git.go          opérations git
 commitmsg.go    rédaction automatique des messages de commit
                 (conflits : git.go côté serveur, web/conflicts.js côté interface)
 detect.go       détection des commandes par type de projet
+ssh.go          connexions SSH enregistrées, saisie des mots de passe (SSH_ASKPASS)
 proc_*.go       spécificités Windows / Unix
 web/            interface (HTML/CSS/JS sans dépendance, intégrée dans l'exécutable)
+                ssh.js = vue SSH et boîte de dialogue des mots de passe
                 highlight.js = coloration syntaxique, sections.js = gestion des sections
 build/          script de compilation, icônes, ressources Windows (icône, manifeste)
 .github/        publication automatique des Releases

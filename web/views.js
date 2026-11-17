@@ -8,6 +8,7 @@ const VIEWS = [
   { id: 'tasks', icon: 'tasks', title: 'Tâches', kb: 'Ctrl+Maj+X' },
   { id: 'sections', icon: 'outline', title: 'Sections', kb: 'Ctrl+Maj+O' },
   { id: 'commands', icon: 'commands', title: 'Commandes', kb: 'Ctrl+Maj+B' },
+  { id: 'ssh', icon: 'server', title: 'SSH', kb: 'Ctrl+Maj+H' },
   { id: 'projects', icon: 'projects', title: 'Projets', kb: 'Ctrl+R' },
 ];
 let currentView = 'explorer';
@@ -61,7 +62,7 @@ function renderSidebar(focus) {
       h('button', { class: 'btn secondary block', style: { marginTop: '6px' }, text: 'Cloner un dépôt', onclick: () => runCmd('project.clone') })));
     return;
   }
-  ({ explorer: renderExplorer, search: renderSearch, git: renderGit, tasks: renderTasks, sections: renderSections, commands: renderCommands, projects: renderProjects })[currentView](focus);
+  ({ explorer: renderExplorer, search: renderSearch, git: renderGit, tasks: renderTasks, sections: renderSections, commands: renderCommands, ssh: (f) => window.SSHView.renderSsh(f), projects: renderProjects })[currentView](focus);
 }
 
 // ================================================================ explorer

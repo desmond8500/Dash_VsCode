@@ -28,6 +28,7 @@ type Project struct {
 
 type Config struct {
 	Projects []*Project                 `json:"projects"`
+	SSH      []*SSHConn                 `json:"ssh,omitempty"`
 	Active   string                     `json:"active"`
 	Settings map[string]any             `json:"settings"`
 	UI       map[string]json.RawMessage `json:"ui"`

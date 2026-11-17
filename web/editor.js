@@ -784,11 +784,17 @@ function onEditorKey(e) {
     copyLines(key === 'x');
     return;
   }
-  // Ctrl+Shift+D copies the current line(s), even with a partial selection
+  // Ctrl+Shift+D copies the current line(s) and pastes them below; the cursor / selection follows the copy
   if (mod && e.shiftKey && !e.altKey && key === 'd') {
     e.preventDefault();
-    const n = copyLines(false);
-    toast(n > 1 ? `${n} lignes copiées` : 'Ligne copiée', 'ok', 1200);
+    const s = ta.selectionStart, en = ta.selectionEnd;
+    const [ls, le] = selectedLineRange(v, s, en);
+    copyLines(false);
+    const block = v.slice(ls, le);
+    ta.setSelectionRange(le, le);
+    insertText('\n' + block);
+    const d = le - ls + 1;
+    ta.setSelectionRange(s + d, en + d);
     return;
   }
   if (mod && key === 'd' && !e.shiftKey) { // duplicate line

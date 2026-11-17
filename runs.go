@@ -120,6 +120,11 @@ type Session struct {
 	Code    *int   `json:"code"`
 	Started int64  `json:"started"`
 	Ended   int64  `json:"ended"`
+	SSH     string `json:"ssh,omitempty"` // saved SSH connection of this session
+	Tty     bool   `json:"tty,omitempty"` // the process has a (remote) terminal that echoes input
+
+	Args []string `json:"-"` // run directly instead of through the shell
+	Env  []string `json:"-"` // added to the environment
 
 	mu      sync.Mutex
 	buf     []byte
@@ -242,9 +247,14 @@ func (ss *Sessions) start(s *Session, line string) error {
 		s.mu.Unlock()
 		return fmt.Errorf("dossier introuvable : %s", s.Cwd)
 	}
-	cmd := shellCommand(line)
+	var cmd *exec.Cmd
+	if len(s.Args) > 0 {
+		cmd = exec.Command(s.Args[0], s.Args[1:]...)
+	} else {
+		cmd = shellCommand(line)
+	}
 	cmd.Dir = s.Cwd
-	cmd.Env = childEnv()
+	cmd.Env = append(childEnv(), s.Env...)
 	cmd.WaitDelay = 5 * time.Second
 	w := sessWriter{ss, s}
 	cmd.Stdout = w
@@ -372,6 +382,12 @@ func (s *Session) snapshot(withBuf bool) map[string]any {
 		"id": s.ID, "project": s.Project, "name": s.Name, "kind": s.Kind,
 		"command": s.Command, "cwd": s.Cwd, "running": s.Running, "code": s.Code,
 		"started": s.Started, "ended": s.Ended,
+	}
+	if s.SSH != "" {
+		m["ssh"] = s.SSH
+	}
+	if s.Tty {
+		m["tty"] = true
 	}
 	if withBuf {
 		m["buffer"] = string(s.buf)
@@ -561,12 +577,14 @@ func (a *App) registerRuns() {
 			return nil, err
 		}
 		s.mu.Lock()
-		in := s.stdin
+		in, tty := s.stdin, s.Tty
 		s.mu.Unlock()
 		if in == nil {
 			return nil, badRequest("aucun processus en attente")
 		}
-		ss.output(s, []byte(strings.ReplaceAll(req.Data, "\n", "\r\n")))
+		if !tty { // a remote terminal echoes the input itself
+			ss.output(s, []byte(strings.ReplaceAll(req.Data, "\n", "\r\n")))
+		}
 		_, err = io.WriteString(in, req.Data)
 		return nil, err
 	})

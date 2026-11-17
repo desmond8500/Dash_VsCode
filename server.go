@@ -23,7 +23,7 @@ import (
 //go:embed web
 var webFS embed.FS
 
-var appVersion = "1.3.0"
+var appVersion = "1.4.0"
 
 type App struct {
 	store    *Store
@@ -37,6 +37,7 @@ type App struct {
 	updater  *Updater
 	restart  bool
 	port     int
+	askpass  *Askpass
 }
 
 type apiError struct {
@@ -94,6 +95,8 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		a.hub.serve(w, r)
+	case path == "/api/askpass":
+		a.serveAskpass(w, r)
 	case path == "/api/raw":
 		if !a.checkToken(r) {
 			http.Error(w, "jeton invalide", 401)

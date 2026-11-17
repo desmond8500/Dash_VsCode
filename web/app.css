@@ -457,3 +457,12 @@ pre.output { background: #1a1a1a; border: 1px solid #333; padding: 8px 10px; fon
 .task-head .icon-btn { width: 18px; height: 18px; visibility: hidden; }
 .task-head:hover .icon-btn { visibility: visible; }
 .kbd-table td:first-child { white-space: nowrap; }
+
+/* SSH view */
+.ssh-warn { margin: 8px 12px; padding: 8px 10px; border-radius: 4px; background: #4b3a12; border: 1px solid #806120; font-size: 12px; }
+.ssh-warn .hint { color: var(--fg-dim); margin-top: 4px; font-size: 11px; }
+.ssh-grid { display: flex; gap: 8px; }
+.ssh-grid > .field:first-child { flex: 1; min-width: 0; }
+.ssh-form .btn-row { flex-wrap: wrap; }
+.ssh-more { margin: 0 0 10px; font-size: 12px; }
+.ssh-more summary { cursor: pointer; color: var(--fg-dim); margin-bottom: 8px; user-select: none; }

@@ -101,16 +101,33 @@ function renderPanelActions() {
   b('close', 'Masquer le panneau (Ctrl+`)', () => showPanel(false));
 }
 
+// hide what is typed when the process asks for a password (sudo, ssh-keygen, git…)
+function maskInput() {
+  const cur = currentSession();
+  const input = $('#term-input');
+  let secret = false;
+  if (cur && cur.info.running) {
+    const last = cur.model.line.map((x) => x.t).join('');
+    secret = /(password|passphrase|mot de passe|passwort|contraseña)[^\n]{0,60}:\s*$/i.test(last);
+  }
+  const type = secret ? 'password' : 'text';
+  if (input.type !== type) input.type = type;
+}
+
 function renderPrompt() {
   const cur = currentSession();
   const row = $('#term-input-row');
   const pr = $('#term-prompt');
   const input = $('#term-input');
+  maskInput();
   if (!cur) { pr.textContent = ''; return; }
   const i = cur.info;
   const stdin = i.running;
   row.classList.toggle('stdin', stdin);
-  if (stdin) {
+  if (stdin && i.tty) {
+    pr.textContent = 'ssh ›';
+    input.placeholder = 'Commande envoyée au serveur (Entrée) — Ctrl+C interrompt, exit pour se déconnecter';
+  } else if (stdin) {
     pr.textContent = 'entrée ›';
     input.placeholder = 'Texte envoyé au processus (Entrée) — Ctrl+C pour arrêter';
   } else if (i.kind === 'terminal') {
@@ -229,7 +246,8 @@ function setupTerminalInput() {
       setTimeout(() => input.setSelectionRange(input.value.length, input.value.length));
     } else if (mod && e.key.toLowerCase() === 'c' && input.selectionStart === input.selectionEnd && !String(getSelection())) {
       const cur = currentSession();
-      if (cur && cur.info.running) { e.preventDefault(); api('run.kill', { id: cur.info.id }).catch(toastErr); }
+      if (cur && cur.info.running && cur.info.tty) { e.preventDefault(); api('run.input', { id: cur.info.id, data: '\x03' }).catch(toastErr); }
+      else if (cur && cur.info.running) { e.preventDefault(); api('run.kill', { id: cur.info.id }).catch(toastErr); }
       else if (input.value) { e.preventDefault(); input.value = ''; }
     } else if (mod && e.key.toLowerCase() === 'l') {
       e.preventDefault();
@@ -299,6 +317,7 @@ function scheduleFlush(s) {
     const out = $('#term-out');
     const atBottom = out.scrollHeight - out.scrollTop - out.clientHeight < 40;
     for (const x of flushQueue) x.model.flush();
+    maskInput();
     flushQueue.clear();
     if (atBottom) out.scrollTop = out.scrollHeight;
   });
@@ -341,13 +360,19 @@ function connectEvents() {
           }
           if (s.info.kind === 'terminal') { refreshGitSoon(); }
         }
-        if (s.info.project === S.pid) { renderSessions(); renderPrompt(); renderStatus(); if (currentView === 'commands') drawCommands(); }
+        if (s.info.project === S.pid) { renderSessions(); renderPrompt(); renderStatus(); if (currentView === 'commands') drawCommands(); if (currentView === 'ssh') window.SSHView.drawSsh(); }
         break;
       case 'cwd':
         if (s) { s.info.cwd = m.cwd; if (s === currentSession()) renderPrompt(); }
         break;
       case 'update':
         handleUpdate(m);
+        break;
+      case 'askpass':
+        window.SSHView.onAskpass(m);
+        break;
+      case 'askpass-done':
+        window.SSHView.onAskpassDone(m);
         break;
       case 'sessions':
         if (m.p === S.pid) loadSessions(S.pid);
